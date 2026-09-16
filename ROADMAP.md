@@ -42,8 +42,6 @@
 
 - Mooncake fork 分支 `gpu-staging-v1`：`gpu_staging_pool.h`（新文件）+
   `tcp_transport_session_impl.h`（4 处 GPU 分支）。
-  ⚠️ `gpu_staging_pool.h` 曾长期只在本地未提交工作树里——教训：
-  **patch 当天就推远程**。
 
 ## 远期（需要硬件条件）
 
