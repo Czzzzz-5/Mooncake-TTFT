@@ -1,0 +1,7 @@
+[warmup done]
+req 0: prompt~2668 tokens -> TTFT = 310.37 ms
+req 1: prompt~2677 tokens -> TTFT = 413.39 ms
+req 2: prompt~2673 tokens -> TTFT = 298.84 ms
+req 3: prompt~2671 tokens -> TTFT = 414.52 ms
+========================================
+端到端 TTFT (客户端口径): avg=359.28 ms, min=298.84, max=414.52, n=4
