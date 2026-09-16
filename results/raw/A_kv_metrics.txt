@@ -1,0 +1,1 @@
+(APIServer pid=306417) INFO 09-16 13:23:55 [distributed/.../v1/metrics.py:103] KV Transfer metrics: Num successful transfers=5, Avg xfer time (ms)=147.251, P90 xfer time (ms)=214.963, Avg MB per transfer=115.15, Throughput (MB/s)=781.998, Avg number of descriptors=1853.6, Num failed transfers=0, Num failed recvs=0, Num KV expired reqs=0

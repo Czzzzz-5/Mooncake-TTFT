@@ -18,9 +18,16 @@ vLLM PD 分离（P 和 D 各一张 RTX 5090），P 算完的 KV cache 经 Moonca
 | 方案 | TTFT (4×16k字符, seed 777) | 传输时间 / 115MB | 有效带宽 | 状态 |
 |---|---|---|---|---|
 | 自研 TCP connector (bf16) | 718.71 ms | — | ~450 MB/s | 存档 |
-| Mooncake TCP 原生 GPU 路径 | 406.63 ms | ~123 ms | 935 MB/s | ✅ 已验证 |
-| + GPU staging v1（锁页池） | 待重跑 | 预期 ~60 ms | ~2000 MB/s | 🔬 验证中 |
-| + 多槽流水 v2 | — | 预期 ~30 ms | ~3500+ MB/s | 📋 设计 |
+| Mooncake TCP 原生 GPU 路径 | 406.63 ms ※ | ~123 ms | 935 MB/s | 存档（含噪声） |
+| 原生路径（安静机重测，A 组） | 427.48 ms | 147.25 ms | 782 MB/s | ✅ 对照基线 |
+| + GPU staging v1（锁页池，B 组） | **352.43 ms** | 114.43 ms | 1231 MB/s | ✅ **已验证** |
+
+※ 旧基线在有第三方负载时测得，仅存档，不参与对比。A/B 对照实验：
+`experiments/2026-09-16-v1-reverify.md`。
+
+| 下一步 | 传输时间目标 | 状态 |
+|---|---|---|
+| 多槽流水 v2（拷贝‖发送） | ~30 ms | 📋 设计 |
 
 标尺：裸 TCP 单连接 ~5.5 GB/s；Mooncake CPU buffer 路径 ~3.4 GB/s。
 
