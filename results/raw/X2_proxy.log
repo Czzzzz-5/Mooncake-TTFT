@@ -1,0 +1,12 @@
+INFO:     Started server process [342155]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+Got 1 prefill clients and 1 decode clients.
+Inited prefiller http://127.0.0.1:8100 with dp_size=1
+All prefiller instances are ready.
+INFO:     127.0.0.1:37730 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37744 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34696 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34706 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34714 - "POST /v1/chat/completions HTTP/1.1" 200 OK
