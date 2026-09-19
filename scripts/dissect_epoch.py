@@ -1,7 +1,7 @@
 import json, re, sys
 from collections import defaultdict
 
-XDBG = re.compile(r'\[XDBG\] (\S+) t=(\d+) (?:reqs=\[\'([^\']+)\'\]|transfer=(\S+))')
+XDBG = re.compile(r"\[XDBG\] (\S+) t=(\d+)(?: reqs=\['([^']+)'\]| transfer=(\S+)| req=(\S+))?")
 TTFT = re.compile(r'\[TTFT\]\s*(\{.*\})')
 
 def parse(path):
@@ -10,7 +10,7 @@ def parse(path):
     for line in open(path):
         m = XDBG.search(line)
         if m:
-            xdbg.append((m.group(1), int(m.group(2)), m.group(3) or m.group(4)))
+            xdbg.append((m.group(1), int(m.group(2)), m.group(3) or m.group(4) or m.group(5)))
         t = TTFT.search(line)
         if t:
             e = json.loads(t.group(1))
@@ -20,6 +20,7 @@ def parse(path):
     return xdbg, ttft
 
 def stem(rid):
+    if rid is None: return None
     for p in ('chatcmpl-', 'xfer-'):
         if rid.startswith(p): rid = rid[len(p):]
     parts = rid.split('-')
