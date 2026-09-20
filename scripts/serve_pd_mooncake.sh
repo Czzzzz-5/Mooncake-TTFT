@@ -17,6 +17,13 @@ PYTHON="/home/wuzichun/llm_serve_demo/vllm-repo/.venv/bin/python"
 REPO="/home/wuzichun/llm_serve_demo/vllm-repo"
 MOONCAKE_CFG='{"kv_connector":"MooncakeConnector","kv_role":"ROLE","kv_connector_extra_config":{"mooncake_protocol":"tcp","device_name":""}}'
 
+# 可选:设 TP_DIR 则开 torch profiler(HTTP /start_profile 触发),例:TP_DIR=/tmp/ttft_exp/tp
+PROF_ARGS=()
+if [ -n "$TP_DIR" ]; then
+  mkdir -p "$TP_DIR"
+  PROF_ARGS=(--profiler-config "{\"profiler\":\"torch\",\"torch_profiler_dir\":\"$TP_DIR\"}")
+fi
+
 case "$1" in
   prefill)
     CUDA_VISIBLE_DEVICES=1 VLLM_MOONCAKE_BOOTSTRAP_PORT=8998 "$VLLM" serve "$MODEL" \
@@ -25,7 +32,8 @@ case "$1" in
       --gpu-memory-utilization 0.85 \
       --max-num-batched-tokens 32768 \
       --no-enable-prefix-caching \
-      --kv-transfer-config "${MOONCAKE_CFG/ROLE/kv_producer}"
+      --kv-transfer-config "${MOONCAKE_CFG/ROLE/kv_producer}" \
+      "${PROF_ARGS[@]}"
     ;;
   decode)
     CUDA_VISIBLE_DEVICES=2 "$VLLM" serve "$MODEL" \
@@ -33,7 +41,8 @@ case "$1" in
       --enforce-eager \
       --gpu-memory-utilization 0.85 \
       --no-enable-prefix-caching \
-      --kv-transfer-config "${MOONCAKE_CFG/ROLE/kv_consumer}"
+      --kv-transfer-config "${MOONCAKE_CFG/ROLE/kv_consumer}" \
+      "${PROF_ARGS[@]}"
     ;;
   proxy)
     exec "$PYTHON" "$REPO/examples/disaggregated/mooncake_connector/mooncake_connector_proxy.py" \
