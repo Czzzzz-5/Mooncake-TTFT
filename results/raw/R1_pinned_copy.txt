@@ -1,0 +1,17 @@
+# R1 第1步：pinned_copy_bench.py --iters 20（GPU0，无引擎无网络）
+# 命令：CUDA_VISIBLE_DEVICES=0 $VENV/python scripts/pinned_copy_bench.py --iters 20
+[bench] device=NVIDIA GeForce RTX 5090
+D2H pinned size=    4.0 MB | avg    0.08 ms (51.66 GB/s) | median    0.08 | min    0.08 | max 0.08 | n=20
+H2D pinned size=    4.0 MB | avg    0.08 ms (50.21 GB/s) | median    0.08 | min    0.08 | max 0.08 | n=20
+D2H pinned size=    8.0 MB | avg    0.15 ms (54.54 GB/s) | median    0.15 | min    0.15 | max 0.15 | n=20
+H2D pinned size=    8.0 MB | avg    0.15 ms (52.95 GB/s) | median    0.15 | min    0.15 | max 0.15 | n=20
+D2H pinned size=   16.0 MB | avg    0.29 ms (56.10 GB/s) | median    0.28 | min    0.28 | max 0.29 | n=20
+H2D pinned size=   16.0 MB | avg    0.29 ms (54.45 GB/s) | median    0.29 | min    0.29 | max 0.30 | n=20
+D2H pinned size=   32.0 MB | avg    0.56 ms (56.99 GB/s) | median    0.56 | min    0.56 | max 0.56 | n=20
+H2D pinned size=   32.0 MB | avg    0.58 ms (55.37 GB/s) | median    0.58 | min    0.58 | max 0.59 | n=20
+D2H pinned size=   64.0 MB | avg    1.11 ms (57.41 GB/s) | median    1.12 | min    1.11 | max 1.12 | n=20
+H2D pinned size=   64.0 MB | avg    1.15 ms (55.79 GB/s) | median    1.15 | min    1.14 | max    1.16 | n=20
+D2H pinned size=  115.0 MB | avg    2.00 ms (57.61 GB/s) | median    2.00 | min    1.99 | max    2.00 | n=20
+H2D pinned size=  115.0 MB | avg    2.05 ms (56.02 GB/s) | median    2.05 | min    2.05 | max    2.06 | n=20
+D2H pageable(ref) size=  115.0 MB | avg    7.03 ms (16.36 GB/s) | median    7.03 | min    7.01 | max    7.07 | n=20
+H2D pageable(ref) size=  115.0 MB | avg    8.73 ms (13.21 GB/s) | median    8.53 | min    8.41 | max   10.27 | n=20

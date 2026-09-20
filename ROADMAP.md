@@ -28,6 +28,10 @@
 - [ ] **v2 多槽流水**：传输切片 + 多槽循环复用，拷第 i 片与发第 i-1 片
       重叠（发送端），收第 i 片与 H2D 第 i-1 片重叠（接收端）。
       预期 ~30ms/115MB，触到单连接 TCP 物理地板。
+      设计参数（R1 轮 09-20 实测）：拷贝 57GB/s vs TCP 4.1GB/s（32MB 起平台），
+      t_copy:t_send≈1:7 → **SLOT_MB=32、SLOTS=4、115MB 切 4 片**；
+      实现顺序：先 gather/描述符合并（追 38.9ms bench 地板），再多槽流水
+      （仅再省 ~4-6ms，二阶）。
       正确性三件套：槽生命周期 / event 排序（注意 cudaStreamPerThread
       隐患待验证）/ v2 ack 须在 H2D 落显存后。
 - [ ] **v3**：`cudaMemcpyBatchAsync`（CUDA 12.8+）压掉逐片提交开销 +
