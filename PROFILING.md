@@ -1,11 +1,10 @@
 # Profiler 工具链报告：nsys + torch profiler 怎么用来监测 PD 传输
 
-日期：2026-09-19（NS1/TP1 两轮沉淀）　整理：2026-09-22
+日期：2026-09-19　整理：2026-09-22
 
 ## 为什么上 profiler
 
-09-17 手工 epoch 打点出过定标事故（跨时钟配对污染，详见
-`experiments/2026-09-16-v1-reverify.md` 解剖节）。改用外挂式 profiler：
+09-17 手工 epoch 打点出过定标事故。改用外挂式 profiler：
 不改业务代码逻辑，直接看系统时间线。**纪律：结构分析用 profiler 轮，
 报数用裸跑轮，两者严格分开**（profiler 税：nsys +90ms/req，torch +184ms/req，
 绝对值一律作废）。
