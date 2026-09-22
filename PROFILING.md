@@ -52,5 +52,6 @@ DtoH 拷贝，把双模真凶钉死在传输描述符碎片化。税比 nsys 重
 | nsys (osrt) | TCP 传输何时发收、停等在哪 | GPU 拷贝（本机 CUPTI 空） |
 | torch profiler | GPU 拷贝次数/窗口/算子构成 | 跨进程业务时序 |
 | epoch XDBG 打点 | 跨进程业务语义（pull 到达等） | 细粒度系统行为 |
+| py-spy | CPU 线程在等谁（锁/IO/socket） | GPU/网络细节；等待态需 `--idle` 才采得到 |
 
 结论冲突时以 profiler 时间线为准。NS1/TP1 详细数据见对应实验卡。
