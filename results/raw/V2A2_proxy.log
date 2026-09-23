@@ -1,0 +1,30 @@
+INFO:     Started server process [46235]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+Got 1 prefill clients and 1 decode clients.
+Inited prefiller http://127.0.0.1:8100 with dp_size=1
+All prefiller instances are ready.
+INFO:     127.0.0.1:42322 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53612 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53616 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53630 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53640 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53644 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46322 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46330 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46344 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46360 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46366 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46372 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46376 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44292 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44306 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44322 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44324 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44330 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44346 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [46235]

@@ -9,6 +9,12 @@ export MC_TCP_MAX_PENDING_ADMISSIONS_PER_PEER=65535
 # （2026-09-15 教训：默认 16MB 导致 acquire 静默回退 legacy，优化全程未生效，见 ttft_report_serving_mooncake_bf16_gpustaging.md）
 export MC_TCP_GPU_STAGING_SLOT_MB=192
 export MC_TCP_GPU_STAGING_SLOTS=4
+# v2a gather 合批（B 组）：GATHER=1 bash serve_pd_mooncake.sh ... 启用；
+# 双端必须同时开（D 端用 buffer 基址交换，P 端没收到广告会自动回退 v1）
+if [ -n "$GATHER" ]; then
+  export VLLM_MOONCAKE_GATHER=1
+  export VLLM_MOONCAKE_GATHER_BUF_MB=${GATHER_BUF_MB:-512}
+fi
 export HF_HUB_OFFLINE=1
 export VLLM_LOGGING_LEVEL=DEBUG  # 真实性核验用：decode 侧逐请求 "pulling kv_caches ... finished"
 MODEL="Qwen/Qwen2.5-7B-Instruct"

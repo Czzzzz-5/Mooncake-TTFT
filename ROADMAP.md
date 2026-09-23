@@ -28,7 +28,12 @@
       "整传输一次大拷贝"的形态未实现——实际按描述符 364~4228 次小异步拷贝，
       收益真实但形态不同，碎片即双模真凶（v2a 的靶子）。
 
-- [ ] **v2a gather 合批（主战场，09-22 设计）**
+- [x] **v2a gather 合批（09-22 实现，09-23 V2 轮验证焊死：−31ms / −9%，
+      seeds 777/888/123，双模消除）**：connector 侧 torch gather 收拢散块进
+      锁页 buffer → CPU 路径 1 描述符整发 → D 侧 scatter 回散块。
+      实验卡 `experiments/2026-09-23-v2a-gather.md`。开关
+      `VLLM_MOONCAKE_GATHER=1`（默认关），buffer `VLLM_MOONCAKE_GATHER_BUF_MB=512`。
+      遗留：wire 54~65ms 距 bench 地板 ~37ms 还有 ~20ms；scatter ~6ms 可再压。
 
       **问题**：KV 是 ~162 个散落 block，connector 只能合并物理连续段
       → 快档 364 / 慢档 4228 个描述符，逐段"借槽→拷→发→还"（TP1）。
@@ -42,7 +47,8 @@
          ─[Mooncake CPU buffer 路径，1 个描述符整发，28.5ms/115MB]→
       D：锁页 buffer ─[torch scatter 打回散块，~3ms]→ GPU → 标记 KV 就绪
       ```
-      传输迭代 4228→1，双模抹平。预期传输段 62~169ms → **~43ms**。
+      传输迭代 4228→1，双模抹平。实测（V2 轮）：wire 54~65ms（bench 地板
+      ~37ms，差距待查），TTFT −31ms/−9%。
 
       **摆放决策：放 vLLM connector（Python），不放 Mooncake（C++）**。
       Mooncake 侧只能收拢 P 侧源地址、D 侧目标仍散，要扩协议带段表；
@@ -60,10 +66,9 @@
       3. 首版逐字节校验（抽 block 对比 hash），开关 `VLLM_MOONCAKE_GATHER=0`
          可回退 v1
 
-      **验证（V2 轮）**：单请求输出 token 逐字一致 + KV hash 抽查 →
-      三轮 A/B（A=v1 现状 4×192MB，B=gather，seeds 777/888/123），
-      判定标准：双模消失 + 均值显著下降。生效证据：XDBG `P_SEND_EXEC`
-      日志 descs=1。
+      **验证（V2 轮，已通过）**：张量级自检（gather/scatter 往返 hash）+
+      三轮 A/B（seeds 777/888/123），双模消失、三轮同向 −26~−35ms，
+      descs=1 证据齐全。详见实验卡。
 
 - [ ] **v2b 多槽流水（降级为可选配套，Mooncake fork 侧）**：传输切片 +
       多槽循环复用，拷第 i+1 片与发第 i 片重叠。设计参数（R1 实测）：

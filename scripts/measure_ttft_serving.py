@@ -54,9 +54,12 @@ def main():
     ap.add_argument("--model", type=str, default="Qwen/Qwen2.5-7B-Instruct")
     args = ap.parse_args()
 
-    # 第 1 条作为 warmup 丢弃（引擎首次请求有初始化开销）
-    warmup = generate_prompts(num_prompts=1, target_chars=1000, seed=999)[0]
-    measure_one(warmup, args.model, max_tokens=1)
+    # warmup 用两条全尺寸 prompt：小 warmup 热不到 ~148MB 的 KV 传输路径，
+    # 冷启动税（TCP 拥塞窗口爬升等）会污染前两个测量请求
+    # （2026-09-22 V2B 轮实测：每轮头两个请求 wire 90~110ms，之后稳定 ~50ms）
+    for wp in generate_prompts(num_prompts=2, target_chars=args.target_chars,
+                               seed=999):
+        measure_one(wp, args.model, max_tokens=1)
     print("[warmup done]")
 
     prompts = generate_prompts(

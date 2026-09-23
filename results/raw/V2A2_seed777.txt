@@ -1,0 +1,6 @@
+[warmup done]（×2 全尺寸 warmup，新脚本）
+req 0: prompt~2680 tokens -> TTFT = 291.22 ms
+req 1: prompt~2675 tokens -> TTFT = 406.49 ms
+req 2: prompt~2666 tokens -> TTFT = 283.70 ms
+req 3: prompt~2670 tokens -> TTFT = 391.01 ms
+端到端 TTFT (客户端口径): avg=343.10 ms, min=283.70, max=406.49, n=4
