@@ -26,6 +26,7 @@ def measure_one(prompt: str, model: str, max_tokens: int = 10) -> float:
     )
     resp.raise_for_status()
     ttft_ms = None
+    t1 = None
     for raw in resp.iter_lines():
         if isinstance(raw, bytes):
             line = raw.decode("utf-8", errors="replace")
@@ -41,7 +42,10 @@ def measure_one(prompt: str, model: str, max_tokens: int = 10) -> float:
         for ch in chunk.get("choices", []):
             delta = (ch.get("delta") or {}).get("content")
             if delta and ttft_ms is None:
-                ttft_ms = (time.time_ns() - t0) / 1e6
+                t1 = time.time_ns()
+                ttft_ms = (t1 - t0) / 1e6
+    # epoch 打点：与引擎侧 XDBG（同机 CLOCK_REALTIME）拼完整瀑布用
+    print(f"  [epoch] t0={t0} t1={t1}")
     return ttft_ms
 
 
