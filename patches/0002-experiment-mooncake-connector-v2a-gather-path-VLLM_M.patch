@@ -1,0 +1,765 @@
+From 7006576afdfb56dd1604adb6a17846de3cb00ded Mon Sep 17 00:00:00 2001
+From: wuzichun <wuzichun@users.noreply.github.com>
+Date: Wed, 23 Sep 2026 07:31:25 +0000
+Subject: [PATCH 2/3] [experiment] mooncake connector: v2a gather path
+ (VLLM_MOONCAKE_GATHER)
+
+Pack scattered KV blocks into a pinned staging buffer on the producer,
+push as one descriptor over the CPU path, scatter back on the consumer
+before marking requests received. V2 A/B (seeds 777/888/123):
+-26~-35ms TTFT, bimodal eliminated.
+
+Co-authored-by: Kimi Code <noreply@moonshot.cn>
+---
+ .../v1/mooncake/mooncake_connector.py         | 528 +++++++++++++++++-
+ vllm/envs.py                                  |  13 +
+ 2 files changed, 531 insertions(+), 10 deletions(-)
+
+diff --git a/vllm/distributed/kv_transfer/kv_connector/v1/mooncake/mooncake_connector.py b/vllm/distributed/kv_transfer/kv_connector/v1/mooncake/mooncake_connector.py
+index dd94ffb2f9..d216e1ed19 100644
+--- a/vllm/distributed/kv_transfer/kv_connector/v1/mooncake/mooncake_connector.py
++++ b/vllm/distributed/kv_transfer/kv_connector/v1/mooncake/mooncake_connector.py
+@@ -6,7 +6,7 @@ import threading
+ import time
+ from collections import defaultdict
+ from concurrent.futures import ThreadPoolExecutor
+-from dataclasses import dataclass
++from dataclasses import dataclass, field
+ from enum import IntEnum
+ from typing import TYPE_CHECKING, Any
+ 
+@@ -376,6 +376,59 @@ def _get_tensor_dense_flag(tensor: torch.Tensor) -> bool | None:
+     return None
+ 
+ 
++def _gather_blocks_to_buffer(
++    buf: torch.Tensor,
++    buf_offset: int,
++    cache: torch.Tensor,
++    block_ids: list[int],
++    block_len: int,
++    payload_offset: int,
++    payload_len: int,
++) -> None:
++    """Pack per-block payloads of one region into a flat (pinned) buffer.
++
++    Bytes land at buf[buf_offset : buf_offset + len(block_ids) * payload_len]
++    as the concatenation, in block_ids order, of each block's payload: the
++    payload_len bytes at cache byte offset block_id * block_len +
++    payload_offset. The consumer must replay the exact same order when
++    scattering the buffer back into its own blocks.
++    """
++    assert cache.is_contiguous(), "Mooncake gather requires contiguous KV caches"
++    num_blocks = len(block_ids)
++    blocks = cache.view(torch.uint8).view(-1, block_len)
++    ids = torch.tensor(block_ids, dtype=torch.int64, device=cache.device)
++    payload = blocks[:, payload_offset : payload_offset + payload_len].index_select(
++        0, ids
++    )
++    dst = buf[buf_offset : buf_offset + num_blocks * payload_len].view(
++        num_blocks, payload_len
++    )
++    dst.copy_(payload, non_blocking=True)
++
++
++def _scatter_buffer_to_blocks(
++    buf: torch.Tensor,
++    buf_offset: int,
++    cache: torch.Tensor,
++    block_ids: list[int],
++    block_len: int,
++    payload_offset: int,
++    payload_len: int,
++) -> None:
++    """Inverse of _gather_blocks_to_buffer: write packed payloads back into
++    the given blocks of a KV cache tensor."""
++    assert cache.is_contiguous(), "Mooncake scatter requires contiguous KV caches"
++    num_blocks = len(block_ids)
++    blocks = cache.view(torch.uint8).view(-1, block_len)
++    ids = torch.tensor(block_ids, dtype=torch.int64, device=cache.device)
++    src = (
++        buf[buf_offset : buf_offset + num_blocks * payload_len]
++        .view(num_blocks, payload_len)
++        .to(cache.device, non_blocking=True)
++    )
++    blocks[:, payload_offset : payload_offset + payload_len].index_copy_(0, ids, src)
++
++
+ class MooncakeXferMetadata(
+     msgspec.Struct,
+     omit_defaults=True,  # type: ignore[call-arg]
+@@ -391,6 +444,37 @@ class MooncakeXferMetadata(
+     registered_layer_names: list[str] = msgspec.field(default_factory=list)
+     registered_layer_indices: list[int] = msgspec.field(default_factory=list)
+     registered_group_indices: list[int] = msgspec.field(default_factory=list)
++    # Base address and capacity of the consumer's pinned gather buffer
++    # (VLLM_MOONCAKE_GATHER). 0 means the consumer has no gather buffer and
++    # the producer must use per-descriptor transfers.
++    gather_buffer_addr: int = 0
++    gather_buffer_size: int = 0
++
++
++class MooncakeGatherSegment(
++    msgspec.Struct,
++    omit_defaults=True,  # type: ignore[call-arg]
++):
++    """One run of the gather buffer: the packed payloads of every block of
++    a single transfer region, in the request's paired block order."""
++
++    layer_name: str
++    layer_index: int
++    # Index among the consumer's regions sharing layer_name, matching the
++    # occurrence counting in _align_transfer_regions (K half before V half).
++    occurrence: int
++    byte_len: int
++
++
++class MooncakeGatherManifest(
++    msgspec.Struct,
++    omit_defaults=True,  # type: ignore[call-arg]
++):
++    """Per-request description of where its KV bytes landed in the gather
++    buffer, so the consumer can scatter them back into its GPU blocks."""
++
++    buf_offset: int
++    segments: list[MooncakeGatherSegment]
+ 
+ 
+ class MooncakeXferResponseStatus(IntEnum):
+@@ -410,6 +494,9 @@ class MooncakeXferResponse(
+     ok_reqs: list[ReqId] | None = None
+     err_reqs: list[ReqId] | None = None
+     err_msg: str | None = None
++    # Set only for requests whose KV was pushed through the gather buffer;
++    # the consumer must scatter these before marking the requests received.
++    gather_manifests: dict[ReqId, MooncakeGatherManifest] | None = None
+ 
+ 
+ @dataclass
+@@ -437,6 +524,22 @@ class SendBlockMeta:
+     sending: int = 0
+ 
+ 
++@dataclass
++class _GatherPlanSegment:
++    local_region: TransferRegion
++    occurrence: int
++    # Local block ids of this region in their paired (transfer) order.
++    local_block_ids: list[int]
++    src_region_offset: int
++    transfer_len: int
++
++
++@dataclass
++class _GatherPlan:
++    segments: dict[ReqId, list[_GatherPlanSegment]] = field(default_factory=dict)
++    total_bytes: int = 0
++
++
+ class MooncakeConnectorMetadata(KVConnectorMetadata):
+     def __init__(self):
+         # Use (engine_id, dp_rank) to group reqs with same dp.
+@@ -846,6 +949,12 @@ class MooncakeConnectorScheduler:
+         """
+ 
+         params = request.kv_transfer_params
++        if params and params.get("transfer_id"):
++            logger.info(
++                "[XDBG] P_REQ_FINISHED t=%d transfer=%s",
++                time.time_ns(),
++                params["transfer_id"],
++            )
+         logger.debug(
+             "MooncakeConnector request_finished, req_id=%s, request_status=%s, "
+             "kv_transfer_params=%s",
+@@ -972,6 +1081,20 @@ class MooncakeConnectorWorker:
+         self.device_kv_caches: dict[str, torch.Tensor] = {}
+         self.reqs_need_send: dict[TransferId, SendBlockMeta] = {}
+ 
++        # Pinned staging buffer for the single-descriptor gather path
++        # (VLLM_MOONCAKE_GATHER). Allocated and registered with the transfer
++        # engine in register_kv_caches(); the consumer advertises its base
++        # address through MooncakeXferMetadata.
++        self._gather_buf_bytes = (
++            envs.VLLM_MOONCAKE_GATHER_BUF_MB * 1024 * 1024
++            if envs.VLLM_MOONCAKE_GATHER
++            else 0
++        )
++        self._gather_buffer: torch.Tensor | None = None
++        self._gather_lock = threading.Lock()
++        self._gather_broken = False
++        self._gather_regions_by_key: dict[tuple[str, int], TransferRegion] = {}
++
+         # For kv_both, we will act both prefiller and decoder.
+         if not self.is_kv_consumer:
+             # Background threads for sending kvcaches to D.
+@@ -1194,6 +1317,11 @@ class MooncakeConnectorWorker:
+         self, identity: bytes, sock: zmq.asyncio.Socket, meta: MooncakeXferMetadata
+     ):
+         pending_reqs: dict[ReqId, SendBlockMeta] = {}
++        logger.info(
++            "[XDBG] P_RECV_PULL t=%d reqs=%s",
++            time.time_ns(),
++            sorted(meta.req_blocks),
++        )
+         remote_tp_ranks = self.transfer_topo.handshake_target_ranks(meta.remote_tp_size)
+         if meta.remote_tp_rank not in remote_tp_ranks:
+             # This D worker does not pair with the P worker.
+@@ -1265,6 +1393,9 @@ class MooncakeConnectorWorker:
+             d_req_id: ReqId, send_meta: SendBlockMeta
+         ) -> tuple[ReqId, SendBlockMeta]:
+             await send_meta.ready.wait()
++            logger.info(
++                "[XDBG] P_WAIT_WAKEUP t=%d req=%s", time.time_ns(), d_req_id
++            )
+             return d_req_id, send_meta
+ 
+         wait_tasks = [
+@@ -1317,6 +1448,15 @@ class MooncakeConnectorWorker:
+                         "Request %s expired before sending on P side.", d_req_id
+                     )
+ 
++            gather_plan: _GatherPlan | None = None
++            if (
++                not self._gather_broken
++                and self._gather_buffer is not None
++                and meta.gather_buffer_addr
++                and self.tp_size == meta.remote_tp_size
++            ):
++                gather_plan = _GatherPlan()
++
+             (
+                 src_ptrs,
+                 dst_ptrs,
+@@ -1328,6 +1468,7 @@ class MooncakeConnectorWorker:
+                 meta,
+                 local_regions,
+                 remote_regions,
++                gather_plan=gather_plan,
+             )
+             err_req_set = set(err_reqs)
+             ok_ready_reqs = [
+@@ -1336,16 +1477,42 @@ class MooncakeConnectorWorker:
+                 if d_req_id not in err_req_set
+             ]
+ 
++            gather_manifests: dict[ReqId, MooncakeGatherManifest] | None = None
+             if src_ptrs:
+                 remote_session = f"{meta.remote_hostname}:{meta.remote_port}"
+-                ret_value = await self.sender_loop.run_in_executor(
+-                    self._sender_executor,
+-                    self._send_blocks,
+-                    remote_session,
+-                    src_ptrs,
+-                    dst_ptrs,
+-                    lengths,
+-                )
++                if gather_plan is not None and self._gather_eligible(
++                    meta, gather_plan
++                ):
++                    ret_value, gather_manifests = (
++                        await self.sender_loop.run_in_executor(
++                            self._sender_executor,
++                            self._gather_and_send_blocks,
++                            remote_session,
++                            meta.gather_buffer_addr,
++                            gather_plan,
++                            [d_req_id for d_req_id, _ in ok_ready_reqs],
++                        )
++                    )
++                    if ret_value is None:
++                        # Gather itself failed; retry with the plain
++                        # per-descriptor path.
++                        ret_value = await self.sender_loop.run_in_executor(
++                            self._sender_executor,
++                            self._send_blocks,
++                            remote_session,
++                            src_ptrs,
++                            dst_ptrs,
++                            lengths,
++                        )
++                else:
++                    ret_value = await self.sender_loop.run_in_executor(
++                        self._sender_executor,
++                        self._send_blocks,
++                        remote_session,
++                        src_ptrs,
++                        dst_ptrs,
++                        lengths,
++                    )
+ 
+                 if ret_value != 0:
+                     transfer_err_msg = f"Mooncake transfer engine returned {ret_value}"
+@@ -1378,6 +1545,7 @@ class MooncakeConnectorWorker:
+                 ok_reqs=[d_req_id for d_req_id, _ in ok_ready_reqs] or None,
+                 err_reqs=err_reqs or None,
+                 err_msg=err_msg,
++                gather_manifests=gather_manifests,
+             )
+             await sock.send_multipart((identity, self._encoder.encode(response)))
+ 
+@@ -1427,6 +1595,7 @@ class MooncakeConnectorWorker:
+         agent_meta: MooncakeXferMetadata,
+         local_regions: list[TransferRegion],
+         remote_regions: list[TransferRegion],
++        gather_plan: "_GatherPlan | None" = None,
+     ) -> tuple[list[int], list[int], list[int], list[ReqId], str | None]:
+         src_ptrs = []
+         dst_ptrs = []
+@@ -1435,6 +1604,16 @@ class MooncakeConnectorWorker:
+         err_msg: str | None = None
+         remote_session = f"{agent_meta.remote_hostname}:{agent_meta.remote_port}"
+ 
++        if gather_plan is not None:
++            # Occurrence indices of the aligned local regions, counted per
++            # layer name exactly like _align_transfer_regions keys them, so
++            # the consumer can match segments against its own registration.
++            occurrence_counts: dict[str, int] = defaultdict(int)
++            region_occurrences: list[int] = []
++            for region in local_regions:
++                region_occurrences.append(occurrence_counts[region.layer_name])
++                occurrence_counts[region.layer_name] += 1
++
+         for d_req_id, send_meta in ready_reqs:
+             _, remote_block_ids_per_group = agent_meta.req_blocks[d_req_id]
+ 
+@@ -1520,7 +1699,9 @@ class MooncakeConnectorWorker:
+                 remote_block_ids_by_group
+             )
+ 
+-            for local_region, remote_region in zip(local_regions, remote_regions):
++            for region_index, (local_region, remote_region) in enumerate(
++                zip(local_regions, remote_regions)
++            ):
+                 assert local_region.group_index == remote_region.group_index, (
+                     "Aligned Mooncake transfer regions must belong to the same "
+                     "KV group."
+@@ -1563,6 +1744,27 @@ class MooncakeConnectorWorker:
+                 assert dst_region_offset + transfer_len <= remote_region.kv_block_len, (
+                     "Destination transfer region exceeds remote KV block size."
+                 )
++                if gather_plan is not None:
++                    # Gather is only offered to homogeneous-TP peers, so the
++                    # plan always covers whole KV blocks with zero offsets.
++                    assert src_region_offset == 0 and dst_region_offset == 0, (
++                        "Mooncake gather requires zero region offsets."
++                    )
++                    paired_block_ids = [
++                        block_id
++                        for group in group_local_block_ids
++                        for block_id in group
++                    ]
++                    gather_plan.segments.setdefault(d_req_id, []).append(
++                        _GatherPlanSegment(
++                            local_region=local_region,
++                            occurrence=region_occurrences[region_index],
++                            local_block_ids=paired_block_ids,
++                            src_region_offset=src_region_offset,
++                            transfer_len=transfer_len,
++                        )
++                    )
++                    gather_plan.total_bytes += transfer_len * len(paired_block_ids)
+                 # Collapse one contiguous block group into a single larger
+                 # transfer descriptor when the per-block copy is identical.
+                 can_coalesce = _can_coalesce_block_transfers(
+@@ -1627,9 +1829,20 @@ class MooncakeConnectorWorker:
+         lengths: list[int],
+     ) -> int:
+         start_time = time.perf_counter()
++        logger.info(
++            "[XDBG] P_SEND_EXEC t=%d descs=%d bytes=%d",
++            time.time_ns(),
++            len(src_ptrs),
++            sum(lengths),
++        )
+         ret_value = self.engine.batch_transfer_sync_write(
+             remote_session, src_ptrs, dst_ptrs, lengths
+         )
++        logger.info(
++            "[XDBG] P_SEND_DONE t=%d ret=%d",
++            time.time_ns(),
++            ret_value,
++        )
+         duration = time.perf_counter() - start_time
+         if ret_value == 0:
+             self.xfer_stats.record_transfer(
+@@ -1650,6 +1863,261 @@ class MooncakeConnectorWorker:
+             )
+         return ret_value
+ 
++    def _gather_eligible(
++        self,
++        agent_meta: MooncakeXferMetadata,
++        gather_plan: _GatherPlan,
++    ) -> bool:
++        """Whether this batch can use the single-descriptor gather path."""
++        if gather_plan.total_bytes == 0:
++            return False
++        capacity = min(self._gather_buf_bytes, agent_meta.gather_buffer_size)
++        if gather_plan.total_bytes > capacity:
++            logger.warning_once(
++                "Mooncake gather: batch of %d bytes exceeds the gather buffer "
++                "capacity %d bytes; falling back to per-descriptor transfer.",
++                gather_plan.total_bytes,
++                capacity,
++            )
++            return False
++        return True
++
++    def _gather_and_send_blocks(
++        self,
++        remote_session: str,
++        remote_buffer_addr: int,
++        gather_plan: _GatherPlan,
++        req_order: list[ReqId],
++    ) -> tuple[int | None, dict[ReqId, MooncakeGatherManifest] | None]:
++        """Pack scattered KV blocks into the pinned gather buffer and push
++        them to the consumer's gather buffer as a single descriptor.
++
++        Layout contract: requests are packed in req_order; within a request,
++        segments follow plan order, which is the exact aligned-region and
++        paired-block order in which _build_transfer_params emits per-block
++        descriptors. Each segment holds its region's block payloads
++        (transfer_len bytes each) concatenated in paired block order. The
++        returned manifests describe this layout so the consumer can scatter
++        the bytes back into its GPU blocks.
++
++        Returns (None, None) if the gather itself failed; the caller must
++        then fall back to the per-descriptor path. On transfer failure the
++        manifests are dropped so the consumer never scatters stale bytes.
++        """
++        try:
++            with self._gather_lock:
++                assert self._gather_buffer is not None
++                buf = self._gather_buffer
++                offset = 0
++                num_segments = 0
++                manifests: dict[ReqId, MooncakeGatherManifest] = {}
++                for req_id in req_order:
++                    segments = gather_plan.segments.get(req_id)
++                    if not segments:
++                        continue
++                    manifest = MooncakeGatherManifest(buf_offset=offset, segments=[])
++                    for seg in segments:
++                        region = seg.local_region
++                        cache = self._find_cache_for_addr(region.base_addr)
++                        _gather_blocks_to_buffer(
++                            buf,
++                            offset,
++                            cache,
++                            seg.local_block_ids,
++                            region.block_len,
++                            region.base_addr - cache.data_ptr() + seg.src_region_offset,
++                            seg.transfer_len,
++                        )
++                        seg_bytes = seg.transfer_len * len(seg.local_block_ids)
++                        manifest.segments.append(
++                            MooncakeGatherSegment(
++                                layer_name=region.layer_name,
++                                layer_index=region.layer_index,
++                                occurrence=seg.occurrence,
++                                byte_len=seg_bytes,
++                            )
++                        )
++                        offset += seg_bytes
++                        num_segments += 1
++                    manifests[req_id] = manifest
++                torch.cuda.synchronize()
++                logger.info(
++                    "[XDBG] P_GATHER_DONE t=%d bytes=%d segs=%d",
++                    time.time_ns(),
++                    offset,
++                    num_segments,
++                )
++                ret_value = self._send_blocks(
++                    remote_session, [buf.data_ptr()], [remote_buffer_addr], [offset]
++                )
++        except Exception:
++            logger.exception(
++                "Mooncake gather failed; disabling it and falling back to "
++                "per-descriptor transfer."
++            )
++            self._gather_broken = True
++            return None, None
++        return ret_value, (manifests if ret_value == 0 else None)
++
++    def _find_cache_for_addr(self, addr: int) -> torch.Tensor:
++        """Return the registered KV cache tensor whose storage holds addr."""
++        for cache_or_caches in self.device_kv_caches.values():
++            caches = (
++                cache_or_caches
++                if isinstance(cache_or_caches, (tuple, list))
++                else (cache_or_caches,)
++            )
++            for cache in caches:
++                storage = cache.untyped_storage()
++                storage_addr = storage.data_ptr()
++                if storage_addr <= addr < storage_addr + storage.nbytes():
++                    return cache
++        raise RuntimeError(
++            f"Address {addr} is not inside any registered KV cache storage."
++        )
++
++    def _remote_block_ids_for_scatter(
++        self, block_ids_per_group: list[list[int]]
++    ) -> list[list[int]]:
++        """Recompute the consumer-side block id lists the producer used,
++        mirroring the NULL-block filtering in _build_transfer_params."""
++        group_specs = self.kv_cache_config.kv_cache_groups
++        return [
++            (
++                [block_id for block_id in group if block_id != NULL_BLOCK_ID]
++                if isinstance(group_specs[i].kv_cache_spec, MambaSpec)
++                else list(group)
++            )
++            for i, group in enumerate(block_ids_per_group)
++        ]
++
++    def _scatter_gathered_buffer(
++        self,
++        manifests: dict[ReqId, MooncakeGatherManifest],
++        pull_metas: dict[ReqId, PullReqMeta],
++    ) -> set[ReqId]:
++        """Scatter gather-buffer bytes back into local GPU KV blocks.
++
++        Runs before the affected requests are marked as received, preserving
++        the "applied at destination" semantics of the per-descriptor path.
++        Returns the set of requests whose scatter failed; those are not
++        marked finished.
++        """
++        if self._gather_buffer is None:
++            logger.error(
++                "Received gather manifests but no gather buffer is registered; "
++                "affected requests will not complete: %s",
++                sorted(manifests),
++            )
++            return set(manifests)
++        failed: set[ReqId] = set()
++        current_platform.set_device(self.device_id)
++        with self._gather_lock:
++            buf = self._gather_buffer
++            total_bytes = 0
++            num_segments = 0
++            for req_id, manifest in manifests.items():
++                pull_meta = pull_metas.get(req_id)
++                if pull_meta is None:
++                    logger.error("Gather manifest for unknown request %s", req_id)
++                    failed.add(req_id)
++                    continue
++                try:
++                    block_ids_by_group = self._logical_to_kernel_block_ids(
++                        self._remote_block_ids_for_scatter(pull_meta.local_block_ids)
++                    )
++                    offset = manifest.buf_offset
++                    for seg in manifest.segments:
++                        region = self._gather_regions_by_key.get(
++                            (seg.layer_name, seg.occurrence)
++                        )
++                        if region is None or region.layer_index != seg.layer_index:
++                            raise RuntimeError(
++                                f"Gather segment {seg.layer_name} occurrence "
++                                f"{seg.occurrence} does not match the local KV "
++                                "cache registration."
++                            )
++                        block_ids = block_ids_by_group[region.group_index]
++                        if len(block_ids) * region.kv_block_len != seg.byte_len:
++                            raise RuntimeError(
++                                f"Gather segment size mismatch for "
++                                f"{seg.layer_name}: manifest={seg.byte_len}, "
++                                f"local={len(block_ids) * region.kv_block_len}."
++                            )
++                        cache = self._find_cache_for_addr(region.base_addr)
++                        _scatter_buffer_to_blocks(
++                            buf,
++                            offset,
++                            cache,
++                            block_ids,
++                            region.block_len,
++                            region.base_addr - cache.data_ptr(),
++                            region.kv_block_len,
++                        )
++                        offset += seg.byte_len
++                        num_segments += 1
++                    total_bytes += offset - manifest.buf_offset
++                except Exception:
++                    logger.exception(
++                        "Failed to scatter gathered KV for request %s.", req_id
++                    )
++                    failed.add(req_id)
++            torch.cuda.synchronize()
++            logger.info(
++                "[XDBG] D_SCATTER_DONE t=%d bytes=%d segs=%d",
++                time.time_ns(),
++                total_bytes,
++                num_segments,
++            )
++        if failed:
++            self.xfer_stats.record_failed_recv()
++        return failed
++
++    def _register_gather_buffer(self) -> None:
++        """Allocate the pinned gather buffer and register it with Mooncake."""
++        if self._gather_buf_bytes <= 0:
++            return
++        try:
++            buf = torch.empty(
++                self._gather_buf_bytes, dtype=torch.uint8, pin_memory=True
++            )
++            ret_value = self.engine.register_memory(buf.data_ptr(), buf.numel())
++            if ret_value != 0:
++                raise RuntimeError(f"register_memory returned {ret_value}")
++        except Exception as e:
++            logger.warning(
++                "Mooncake gather buffer setup failed (%s); "
++                "VLLM_MOONCAKE_GATHER is disabled.",
++                e,
++            )
++            self._gather_buf_bytes = 0
++            self._gather_buffer = None
++            return
++        self._gather_buffer = buf
++        logger.info(
++            "Mooncake gather buffer: %d MiB pinned at %#x",
++            self._gather_buf_bytes >> 20,
++            buf.data_ptr(),
++        )
++
++    def _build_gather_region_lookup(self) -> None:
++        """Map (layer_name, occurrence) to the local transfer region, using
++        the same per-layer occurrence counting as _align_transfer_regions."""
++        regions = self._get_transfer_regions(
++            self.kv_caches_base_addr,
++            self.block_len_per_layer,
++            self.kv_block_len_per_layer,
++            self.registered_layer_names,
++            self.registered_layer_indices,
++            self.registered_group_indices,
++        )
++        occurrence_counts: dict[str, int] = defaultdict(int)
++        self._gather_regions_by_key = {}
++        for region in regions:
++            occurrence = occurrence_counts[region.layer_name]
++            occurrence_counts[region.layer_name] += 1
++            self._gather_regions_by_key[(region.layer_name, occurrence)] = region
++
+     def register_kv_caches(self, kv_caches: dict[str, torch.Tensor]):
+         """Register the KV Cache data in mooncake."""
+ 
+@@ -1733,6 +2201,9 @@ class MooncakeConnectorWorker:
+             self.kv_block_len_per_layer,
+         )
+ 
++        self._build_gather_region_lookup()
++        self._register_gather_buffer()
++
+         # No need to launch server for D node.
+         if self.is_kv_consumer:
+             return
+@@ -1837,6 +2308,14 @@ class MooncakeConnectorWorker:
+             registered_layer_names=self.registered_layer_names,
+             registered_layer_indices=self.registered_layer_indices,
+             registered_group_indices=self.registered_group_indices,
++            gather_buffer_addr=(
++                self._gather_buffer.data_ptr()
++                if self._gather_buffer is not None
++                else 0
++            ),
++            gather_buffer_size=(
++                self._gather_buf_bytes if self._gather_buffer is not None else 0
++            ),
+         )
+ 
+         encoded_data = self._encoder.encode(metadata)
+@@ -1857,6 +2336,11 @@ class MooncakeConnectorWorker:
+                     zmq.RCVTIMEO, (envs.VLLM_MOONCAKE_ABORT_REQUEST_TIMEOUT + 60) * 1000
+                 )
+                 await sock.send(encoded_data)
++                logger.info(
++                    "[XDBG] D_SEND_PULL t=%d reqs=%s",
++                    time.time_ns(),
++                    sorted(req_ids),
++                )
+                 while True:
+                     ret_msg = await sock.recv()
+                     response = self._xfer_resp_decoder.decode(ret_msg)
+@@ -1884,8 +2368,24 @@ class MooncakeConnectorWorker:
+         pull_metas: dict[ReqId, PullReqMeta],
+     ):
+         ok_reqs: list[ReqId] = response.ok_reqs or []
++        logger.info(
++            "[XDBG] D_RESP_RECV t=%d reqs=%s",
++            time.time_ns(),
++            sorted(ok_reqs),
++        )
++
++        failed_scatter: set[ReqId] = set()
++        if response.gather_manifests:
++            # The KV bytes of these requests are sitting in the pinned gather
++            # buffer; scatter them into the GPU blocks BEFORE marking the
++            # requests as received.
++            failed_scatter = self._scatter_gathered_buffer(
++                response.gather_manifests, pull_metas
++            )
+ 
+         for req_id in ok_reqs:
++            if req_id in failed_scatter:
++                continue
+             pull_meta = pull_metas[req_id]
+             # No race because we are in async loop.
+             pull_meta.pull_tasks_count -= 1
+@@ -2008,6 +2508,9 @@ class MooncakeConnectorWorker:
+                     time.perf_counter() + envs.VLLM_MOONCAKE_ABORT_REQUEST_TIMEOUT
+                 )
+                 send_meta.ready.set()
++                logger.info(
++                    "[XDBG] P_READY t=%d transfer=%s", time.time_ns(), transfer_id
++                )
+             else:
+                 # From update_state_after_alloc(),
+                 # but not reach request_finished() yet
+@@ -2034,6 +2537,11 @@ class MooncakeConnectorWorker:
+         if not self.is_kv_consumer and (
+             metadata.reqs_to_send or metadata.reqs_not_processed
+         ):
++            logger.info(
++                "[XDBG] P_POST_RECORD t=%d reqs=%s",
++                time.time_ns(),
++                sorted(metadata.reqs_to_send),
++            )
+             asyncio.run_coroutine_threadsafe(
+                 self.record_send_reqs(metadata), self.sender_loop
+             )
+diff --git a/vllm/envs.py b/vllm/envs.py
+index e410dd7f54..3fb690952a 100755
+--- a/vllm/envs.py
++++ b/vllm/envs.py
+@@ -253,6 +253,8 @@ if TYPE_CHECKING:
+     VLLM_ROCM_QUICK_REDUCE_MIN_SIZE_BYTES_MB: int | None = None
+     VLLM_ROCM_QUICK_REDUCE_QUANTIZATION_MIN_SIZE_KB: int | None = None
+     VLLM_MOONCAKE_ABORT_REQUEST_TIMEOUT: int = 480
++    VLLM_MOONCAKE_GATHER: bool = False
++    VLLM_MOONCAKE_GATHER_BUF_MB: int = 512
+     VLLM_ENABLE_CUDAGRAPH_GC: bool = False
+     VLLM_LOOPBACK_IP: str = ""
+     VLLM_ALLOW_CHUNKED_LOCAL_ATTN_WITH_HYBRID_KV_CACHE: bool = True
+@@ -1808,6 +1810,17 @@ environment_variables: dict[str, Callable[[], Any]] = {
+     "VLLM_MOONCAKE_ABORT_REQUEST_TIMEOUT": lambda: int(
+         os.getenv("VLLM_MOONCAKE_ABORT_REQUEST_TIMEOUT", "480")
+     ),
++    # Mooncake connector: gather scattered KV blocks into a pinned staging
++    # buffer and push them to the decoder's staging buffer as one descriptor,
++    # instead of one descriptor per contiguous block run. Both sides must
++    # opt in for the path to activate.
++    "VLLM_MOONCAKE_GATHER": lambda: bool(int(os.getenv("VLLM_MOONCAKE_GATHER", "0"))),
++    # Size in MiB of the per-worker pinned gather buffer used by
++    # VLLM_MOONCAKE_GATHER. Transfer batches larger than the buffer fall
++    # back to per-descriptor transfer.
++    "VLLM_MOONCAKE_GATHER_BUF_MB": lambda: int(
++        os.getenv("VLLM_MOONCAKE_GATHER_BUF_MB", "512")
++    ),
+     # If set, it means we pre-downloaded cubin files and flashinfer will
+     # read the cubin files directly.
+     "VLLM_HAS_FLASHINFER_CUBIN": lambda: bool(
+-- 
+2.43.0
+

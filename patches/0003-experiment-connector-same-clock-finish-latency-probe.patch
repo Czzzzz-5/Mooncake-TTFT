@@ -1,0 +1,1197 @@
+From 42058cb261be3e392d7f4c2c2ede6f02b233e176 Mon Sep 17 00:00:00 2001
+From: wuzichun <wuzichun@users.noreply.github.com>
+Date: Sat, 26 Sep 2026 14:57:20 +0000
+Subject: [PATCH 3/3] [experiment] connector: same-clock finish-latency probe
+ (connector_request_finished ttft_event)
+
+Co-authored-by: Kimi Code <noreply@moonshot.cn>
+---
+ .../v1/mooncake/mooncake_connector.py         |   5 +
+ .../kv_connector/v1/my_pd_connector.py        | 465 +++++++++++++
+ .../kv_connector/v1/my_pd_tcp_connector.py    | 658 ++++++++++++++++++
+ vllm/ttft_logger.py                           |  19 +
+ 4 files changed, 1147 insertions(+)
+ create mode 100644 vllm/distributed/kv_transfer/kv_connector/v1/my_pd_connector.py
+ create mode 100644 vllm/distributed/kv_transfer/kv_connector/v1/my_pd_tcp_connector.py
+ create mode 100644 vllm/ttft_logger.py
+
+diff --git a/vllm/distributed/kv_transfer/kv_connector/v1/mooncake/mooncake_connector.py b/vllm/distributed/kv_transfer/kv_connector/v1/mooncake/mooncake_connector.py
+index d216e1ed19..a7c947389e 100644
+--- a/vllm/distributed/kv_transfer/kv_connector/v1/mooncake/mooncake_connector.py
++++ b/vllm/distributed/kv_transfer/kv_connector/v1/mooncake/mooncake_connector.py
+@@ -955,6 +955,11 @@ class MooncakeConnectorScheduler:
+                 time.time_ns(),
+                 params["transfer_id"],
+             )
++        # 同进程同时钟（perf_counter）打点：与 [TTFT] 事件合法配对，
++        # 用于测量 "首 token 生成 → 连接器被告知完成" 的引擎内部延迟
++        from vllm.ttft_logger import ttft_event
++
++        ttft_event(request.request_id, "connector_request_finished", role="scheduler")
+         logger.debug(
+             "MooncakeConnector request_finished, req_id=%s, request_status=%s, "
+             "kv_transfer_params=%s",
+diff --git a/vllm/distributed/kv_transfer/kv_connector/v1/my_pd_connector.py b/vllm/distributed/kv_transfer/kv_connector/v1/my_pd_connector.py
+new file mode 100644
+index 0000000000..3a132a5b2d
+--- /dev/null
++++ b/vllm/distributed/kv_transfer/kv_connector/v1/my_pd_connector.py
+@@ -0,0 +1,465 @@
++# SPDX-License-Identifier: Apache-2.0
++# SPDX-FileCopyrightText: Copyright contributors to the vLLM project
++"""
++MyPDConnector: a minimal reference implementation of disaggregated
++prefill-decode (PD) separation using the vLLM v1 KV connector API.
++
++This connector intentionally uses shared local disk as the KV transport
++so that you can see the exact PD hand-off points without extra network
++or RDMA dependencies.
++
++- Producer (prefill) side: saves prompt KV caches to disk after prefill.
++- Consumer (decode) side: loads prompt KV caches from disk before decode.
++"""
++
++import os
++from dataclasses import dataclass, field
++from typing import TYPE_CHECKING, Any
++
++import safetensors
++import torch
++
++from vllm.config import VllmConfig
++from vllm.distributed.kv_transfer.kv_connector.v1.base import (
++    KVConnectorBase_V1,
++    KVConnectorMetadata,
++    KVConnectorRole,
++)
++from vllm.logger import init_logger
++from vllm.model_executor.layers.attention.mla_attention import MLACommonMetadata
++from vllm.utils.gpu_sync_debug import gpu_sync_allowed
++from vllm.utils.hashing import safe_hash
++from vllm.v1.attention.backend import AttentionMetadata
++from vllm.v1.core.sched.output import SchedulerOutput
++
++if TYPE_CHECKING:
++    from vllm.forward_context import ForwardContext
++    from vllm.v1.core.kv_cache_manager import KVCacheBlocks
++    from vllm.v1.kv_cache_interface import KVCacheConfig
++    from vllm.v1.request import Request
++
++from vllm.ttft_logger import ttft_event
++
++logger = init_logger(__name__)
++
++
++@dataclass
++class MyPDReqMeta:
++    """Per-request metadata carried to worker."""
++
++    req_id: str
++    token_ids: torch.Tensor
++    slot_mapping: torch.Tensor
++    is_store: bool
++    mm_hashes: list[str]
++
++    @staticmethod
++    def make_meta(
++        req_id: str,
++        token_ids: list[int],
++        block_ids: list[int],
++        block_size: int,
++        is_store: bool,
++        mm_hashes: list[str],
++    ) -> "MyPDReqMeta":
++        valid_num_tokens = align_to_block_size(len(token_ids), block_size)
++        token_ids_tensor = torch.tensor(token_ids)[:valid_num_tokens]
++        block_ids_tensor = torch.tensor(block_ids)
++        num_blocks = block_ids_tensor.shape[0]
++        block_offsets = torch.arange(0, block_size)
++        slot_mapping = (
++            block_offsets.reshape((1, block_size))
++            + block_ids_tensor.reshape((num_blocks, 1)) * block_size
++        )
++        slot_mapping = slot_mapping.flatten()[:valid_num_tokens]
++        return MyPDReqMeta(
++            req_id=req_id,
++            token_ids=token_ids_tensor,
++            slot_mapping=slot_mapping,
++            is_store=is_store,
++            mm_hashes=mm_hashes,
++        )
++
++
++@dataclass
++class MyPDConnectorMetadata(KVConnectorMetadata):
++    requests: list[MyPDReqMeta] = field(default_factory=list)
++
++    def add_request(
++        self,
++        req_id: str,
++        token_ids: list[int],
++        block_ids: list[int],
++        block_size: int,
++        is_store: bool,
++        mm_hashes: list[str],
++    ) -> None:
++        self.requests.append(
++            MyPDReqMeta.make_meta(
++                req_id, token_ids, block_ids, block_size, is_store, mm_hashes
++            )
++        )
++
++
++class MyPDConnector(KVConnectorBase_V1):
++    """
++    Minimal disk-based PD connector.
++
++    The key idea:
++    1. Scheduler looks at a new request and checks whether its prompt KV
++       already exists on disk (`get_num_new_matched_tokens`).
++    2. If not, it tells the prefill worker to STORE the KV after prefill.
++    3. The decode worker later sees the same prompt, finds the stored KV,
++       and tells the worker to LOAD it into the paged KV cache.
++    """
++
++    def __init__(
++        self,
++        vllm_config: "VllmConfig",
++        role: KVConnectorRole,
++        kv_cache_config: "KVCacheConfig",
++    ):
++        super().__init__(
++            vllm_config=vllm_config,
++            role=role,
++            kv_cache_config=kv_cache_config,
++        )
++        self._block_size = vllm_config.cache_config.block_size
++        self._requests_need_load: dict[str, Request] = {}
++        self._storage_path = self._kv_transfer_config.get_from_extra_config(
++            "shared_storage_path", "/tmp/my_pd_storage"
++        )
++        os.makedirs(self._storage_path, exist_ok=True)
++        logger.info(
++            "[MyPDConnector] role=%s storage_path=%s",
++            role.name,
++            self._storage_path,
++        )
++
++    # ==========================================================
++    # Worker-side: load KV from external storage into vLLM buffer
++    # ==========================================================
++    def start_load_kv(
++        self, forward_context: "ForwardContext", **kwargs: Any
++    ) -> None:
++        """Called before model forward on the decode (consumer) worker."""
++
++        def inject_kv_into_layer(
++            dst_kv_cache_layer: torch.Tensor,
++            src_kv_cache: torch.Tensor,
++            slot_mapping: torch.Tensor,
++            attn_metadata: AttentionMetadata,
++        ) -> None:
++            slot_mapping = slot_mapping.to(
++                dst_kv_cache_layer.device, non_blocking=True
++            )
++            if isinstance(attn_metadata, MLACommonMetadata):
++                num_pages, page_size = dst_kv_cache_layer.shape[:2]
++                dst_kv_cache_layer = dst_kv_cache_layer.reshape(
++                    num_pages * page_size, -1
++                )
++                dst_kv_cache_layer[slot_mapping, ...] = src_kv_cache
++            else:
++                block_idxs = slot_mapping // self._block_size
++                offsets = slot_mapping % self._block_size
++                dst_kv_cache_layer[block_idxs, :, offsets] = src_kv_cache
++
++        metadata = self._get_connector_metadata()
++        assert isinstance(metadata, MyPDConnectorMetadata)
++
++        attn_metadata = forward_context.attn_metadata
++        if attn_metadata is None:
++            logger.warning(
++                "[MyPDConnector] start_load_kv called but attn_metadata is None"
++            )
++            return
++
++        for request in metadata.requests:
++            if request.is_store:
++                continue
++            ttft_event(
++                request.req_id,
++                "kv_load_start",
++                role="decode",
++                extra={"tokens": len(request.slot_mapping)},
++            )
++            logger.info(
++                "[MyPDConnector] LOADING %d tokens from disk into paged KV cache",
++                len(request.slot_mapping),
++            )
++            for layer_name in forward_context.no_compile_layers:
++                layer = forward_context.no_compile_layers[layer_name]
++                kv_cache_layer = getattr(layer, "kv_cache", None)
++                if kv_cache_layer is None:
++                    continue
++
++                filename = self._make_layer_file(
++                    layer_name, request.token_ids, request.mm_hashes
++                )
++                if not os.path.exists(filename):
++                    logger.warning("[MyPDConnector] missing file: %s", filename)
++                    continue
++
++                kv_cache_cpu = safetensors.torch.load_file(filename)["kv_cache"]
++                kv_cache = kv_cache_cpu.to(
++                    kv_cache_layer.device, non_blocking=True
++                )
++                if isinstance(attn_metadata, dict):
++                    inject_kv_into_layer(
++                        kv_cache_layer,
++                        kv_cache,
++                        request.slot_mapping,
++                        attn_metadata[layer_name],
++                    )
++                    logger.info(
++                        "[MyPDConnector] injected layer %s for request",
++                        layer_name,
++                    )
++            ttft_event(
++                request.req_id,
++                "kv_load_end",
++                role="decode",
++                extra={"tokens": len(request.slot_mapping)},
++            )
++
++    def wait_for_layer_load(self, layer_name: str) -> None:
++        """Disk load is synchronous; nothing to wait for."""
++        return
++
++    # ==========================================================
++    # Worker-side: save KV from vLLM buffer to external storage
++    # ==========================================================
++    def save_kv_layer(
++        self,
++        layer_name: str,
++        kv_layer: torch.Tensor,
++        attn_metadata: AttentionMetadata,
++        **kwargs: Any,
++    ) -> None:
++        """Called inside model forward on the prefill (producer) worker."""
++
++        def extract_kv_from_layer(
++            layer: torch.Tensor, slot_mapping: torch.Tensor
++        ) -> torch.Tensor:
++            slot_mapping = slot_mapping.to(layer.device, non_blocking=True)
++            if isinstance(attn_metadata, MLACommonMetadata):
++                num_pages, page_size = layer.shape[:2]
++                return layer.reshape(num_pages * page_size, -1)[
++                    slot_mapping, ...
++                ]
++            block_idxs = slot_mapping // self._block_size
++            offsets = slot_mapping % self._block_size
++            return layer[block_idxs, :, offsets]
++
++        connector_metadata = self._get_connector_metadata()
++        assert isinstance(connector_metadata, MyPDConnectorMetadata)
++        for request in connector_metadata.requests:
++            if request.is_store:
++                ttft_event(
++                    request.req_id,
++                    "kv_save_start",
++                    role="prefill",
++                    extra={"layer": layer_name, "tokens": len(request.slot_mapping)},
++                )
++                filename = self._make_layer_file(
++                    layer_name, request.token_ids, request.mm_hashes
++                )
++                kv_cache = extract_kv_from_layer(kv_layer, request.slot_mapping)
++                with gpu_sync_allowed():
++                    tensors = {"kv_cache": kv_cache.detach().cpu()}
++                safetensors.torch.save_file(tensors, filename)
++                logger.info(
++                    "[MyPDConnector] SAVED layer %s (%d tokens) -> %s",
++                    layer_name,
++                    len(request.slot_mapping),
++                    filename,
++                )
++                ttft_event(
++                    request.req_id,
++                    "kv_save_end",
++                    role="prefill",
++                    extra={"layer": layer_name, "tokens": len(request.slot_mapping)},
++                )
++
++    def wait_for_save(self) -> None:
++        """Disk save is synchronous; nothing to wait for."""
++        return
++
++    # ==========================================================
++    # Scheduler-side: decide what KV can be reused
++    # ==========================================================
++    def get_num_new_matched_tokens(
++        self,
++        request: "Request",
++        num_computed_tokens: int,
++    ) -> tuple[int | None, bool]:
++        """
++        Return how many tokens of this request can be loaded from external
++        storage instead of being recomputed locally.
++        """
++        if not self._found_match_for_request(request):
++            return 0, False
++
++        logger.info(
++            "[MyPDConnector] CACHE HIT for request %s", request.request_id
++        )
++        token_ids = request.prompt_token_ids or []
++        # Match up to the last full block of the prompt (excluding the
++        # final token, which will be generated next).
++        num_tokens_to_check = align_to_block_size(
++            len(token_ids) - 1, self._block_size
++        )
++        return num_tokens_to_check - num_computed_tokens, False
++
++    def update_state_after_alloc(
++        self,
++        request: "Request",
++        blocks: "KVCacheBlocks",
++        num_external_tokens: int,
++    ) -> None:
++        """Remember that this request needs KV loaded on the next step."""
++        if num_external_tokens > 0:
++            self._requests_need_load[request.request_id] = request
++
++    def build_connector_meta(
++        self,
++        scheduler_output: SchedulerOutput,
++    ) -> KVConnectorMetadata:
++        """Translate scheduler decisions into worker-visible metadata."""
++        meta = MyPDConnectorMetadata()
++
++        total_need_load = 0
++        for new_req in scheduler_output.scheduled_new_reqs:
++            token_ids = new_req.prompt_token_ids or []
++            mm_hashes = [f.identifier for f in new_req.mm_features]
++            if new_req.req_id in self._requests_need_load:
++                # Decode side: load previously saved KV.
++                meta.add_request(
++                    req_id=new_req.req_id,
++                    token_ids=token_ids,
++                    block_ids=new_req.block_ids[0],
++                    block_size=self._block_size,
++                    is_store=False,
++                    mm_hashes=mm_hashes,
++                )
++                total_need_load += 1
++                logger.info(
++                    "[MyPDConnector] SCHEDULE LOAD request=%s tokens=%d",
++                    new_req.req_id,
++                    len(token_ids),
++                )
++                ttft_event(
++                    new_req.req_id,
++                    "connector_decision_load",
++                    role="scheduler",
++                    extra={"tokens": len(token_ids)},
++                )
++            else:
++                # Prefill side: store KV so decode can reuse it later.
++                if not self._found_match_for_prompt(token_ids, mm_hashes):
++                    meta.add_request(
++                        req_id=new_req.req_id,
++                        token_ids=token_ids,
++                        block_ids=new_req.block_ids[0],
++                        block_size=self._block_size,
++                        is_store=True,
++                        mm_hashes=mm_hashes,
++                    )
++                    logger.info(
++                        "[MyPDConnector] SCHEDULE STORE request=%s tokens=%d",
++                        new_req.req_id,
++                        len(token_ids),
++                    )
++                    ttft_event(
++                        new_req.req_id,
++                        "connector_decision_store",
++                        role="scheduler",
++                        extra={"tokens": len(token_ids)},
++                    )
++
++        cached_reqs = scheduler_output.scheduled_cached_reqs
++        for i, req_id in enumerate(cached_reqs.req_ids):
++            resumed_from_preemption = req_id in cached_reqs.resumed_req_ids
++            if not resumed_from_preemption or req_id not in self._requests_need_load:
++                continue
++
++            num_computed_tokens = cached_reqs.num_computed_tokens[i]
++            num_new_tokens = scheduler_output.num_scheduled_tokens[req_id]
++            new_block_ids = cached_reqs.new_block_ids[i]
++            request = self._requests_need_load[req_id]
++            total_tokens = num_computed_tokens + num_new_tokens
++            token_ids = request.all_token_ids[:total_tokens]
++            assert new_block_ids is not None
++            block_ids = new_block_ids[0]
++
++            meta.add_request(
++                req_id=request.request_id,
++                token_ids=token_ids,
++                block_ids=block_ids,
++                block_size=self._block_size,
++                is_store=False,
++                mm_hashes=[f.identifier for f in request.mm_features],
++            )
++            total_need_load += 1
++
++        assert total_need_load == len(self._requests_need_load)
++        self._requests_need_load.clear()
++        return meta
++
++    # ==========================================================
++    # Helpers
++    # ==========================================================
++    def _found_match_for_request(self, request: "Request") -> bool:
++        return self._found_match_for_prompt(
++            list(request.prompt_token_ids or []),
++            [f.identifier for f in request.mm_features],
++        )
++
++    def _found_match_for_prompt(
++        self,
++        prompt_token_ids: list[int],
++        mm_hashes: list[str],
++    ) -> bool:
++        num_tokens_to_check = align_to_block_size(
++            len(prompt_token_ids) - 1, self._block_size
++        )
++        foldername = self._make_prompt_folder(
++            torch.tensor(prompt_token_ids)[:num_tokens_to_check],
++            mm_hashes,
++            create_folder=False,
++        )
++        return os.path.exists(foldername)
++
++    def _make_prompt_folder(
++        self,
++        token_ids: torch.Tensor,
++        mm_hashes: list[str],
++        create_folder: bool = False,
++    ) -> str:
++        token_bytes = token_ids.numpy().tobytes()
++        if mm_hashes:
++            mm_str = "-".join(mm_hashes)
++            token_bytes += mm_str.encode("utf-8")
++        input_ids_hash = safe_hash(
++            token_bytes, usedforsecurity=False
++        ).hexdigest()
++        foldername = os.path.join(self._storage_path, input_ids_hash)
++        if create_folder:
++            os.makedirs(foldername, exist_ok=True)
++        return foldername
++
++    def _make_layer_file(
++        self,
++        layer_name: str,
++        token_ids: torch.Tensor,
++        mm_hashes: list[str],
++    ) -> str:
++        foldername = self._make_prompt_folder(
++            token_ids, mm_hashes=mm_hashes, create_folder=True
++        )
++        return os.path.join(foldername, f"{layer_name}.safetensors")
++
++
++def align_to_block_size(num_tokens: int, block_size: int) -> int:
++    """Round down to the nearest multiple of block_size."""
++    return (num_tokens - 1) // block_size * block_size
+diff --git a/vllm/distributed/kv_transfer/kv_connector/v1/my_pd_tcp_connector.py b/vllm/distributed/kv_transfer/kv_connector/v1/my_pd_tcp_connector.py
+new file mode 100644
+index 0000000000..399a5c9448
+--- /dev/null
++++ b/vllm/distributed/kv_transfer/kv_connector/v1/my_pd_tcp_connector.py
+@@ -0,0 +1,658 @@
++# SPDX-License-Identifier: Apache-2.0
++# SPDX-FileCopyrightText: Copyright contributors to the vLLM project
++"""
++MyPDTCPConnector: TCP-based disaggregated prefill-decode connector.
++
++Producer (prefill) side binds a TCP socket and pushes KV caches.
++Consumer (decode) side connects to the producer and pulls KV caches.
++"""
++
++import pickle
++import socket
++import struct
++import threading
++import time
++from dataclasses import dataclass, field
++from typing import TYPE_CHECKING, Any
++
++import torch
++
++from vllm.config import VllmConfig
++from vllm.distributed.kv_transfer.kv_connector.v1.base import (
++    KVConnectorBase_V1,
++    KVConnectorMetadata,
++    KVConnectorRole,
++)
++from vllm.logger import init_logger
++from vllm.ttft_logger import ttft_event
++from vllm.model_executor.layers.attention.mla_attention import MLACommonMetadata
++from vllm.utils.gpu_sync_debug import gpu_sync_allowed
++from vllm.utils.hashing import safe_hash
++from vllm.v1.attention.backend import AttentionMetadata
++from vllm.v1.core.sched.output import SchedulerOutput
++
++if TYPE_CHECKING:
++    from vllm.forward_context import ForwardContext
++    from vllm.v1.core.kv_cache_manager import KVCacheBlocks
++    from vllm.v1.kv_cache_interface import KVCacheConfig
++    from vllm.v1.request import Request
++
++logger = init_logger(__name__)
++
++MAGIC = b"KVTM"
++_HEADER_FMT = "!4sI"  # magic + message total length (after header)
++
++# Module-level singleton state shared between the worker and scheduler
++# connector instances that live in the same process.
++_server_sock: socket.socket | None = None
++_kv_cache: dict[tuple[str, str], torch.Tensor] = {}
++_available_keys: set[str] = set()
++_lock = threading.Lock()
++
++
++@dataclass
++class MyPDTCPReqMeta:
++    """Per-request metadata carried from scheduler to worker."""
++
++    req_id: str
++    token_ids: torch.Tensor
++    slot_mapping: torch.Tensor
++    is_store: bool
++    mm_hashes: list[str]
++
++    @staticmethod
++    def make_meta(
++        req_id: str,
++        token_ids: list[int],
++        block_ids: list[int],
++        block_size: int,
++        is_store: bool,
++        mm_hashes: list[str],
++    ) -> "MyPDTCPReqMeta":
++        valid_num_tokens = align_to_block_size(len(token_ids), block_size)
++        token_ids_tensor = torch.tensor(token_ids)[:valid_num_tokens]
++        block_ids_tensor = torch.tensor(block_ids)
++        num_blocks = block_ids_tensor.shape[0]
++        block_offsets = torch.arange(0, block_size)
++        slot_mapping = (
++            block_offsets.reshape((1, block_size))
++            + block_ids_tensor.reshape((num_blocks, 1)) * block_size
++        )
++        slot_mapping = slot_mapping.flatten()[:valid_num_tokens]
++        return MyPDTCPReqMeta(
++            req_id=req_id,
++            token_ids=token_ids_tensor,
++            slot_mapping=slot_mapping,
++            is_store=is_store,
++            mm_hashes=mm_hashes,
++        )
++
++
++@dataclass
++class MyPDTCPConnectorMetadata(KVConnectorMetadata):
++    requests: list[MyPDTCPReqMeta] = field(default_factory=list)
++
++    def add_request(
++        self,
++        req_id: str,
++        token_ids: list[int],
++        block_ids: list[int],
++        block_size: int,
++        is_store: bool,
++        mm_hashes: list[str],
++    ) -> None:
++        self.requests.append(
++            MyPDTCPReqMeta.make_meta(
++                req_id, token_ids, block_ids, block_size, is_store, mm_hashes
++            )
++        )
++
++
++class MyPDTCPConnector(KVConnectorBase_V1):
++    """
++    TCP-based PD connector.
++
++    - Producer (prefill): binds a TCP socket, stores generated KV in memory,
++      and serves it to consumers.
++    - Consumer (decode): connects to producer, queries whether KV exists,
++      and pulls KV tensors into the local paged buffer.
++
++    Note: vLLM creates two connector instances per engine, one for the
++    scheduler and one for the worker. In server mode we start the TCP listener
++    only from the worker instance; both instances share the module-level KV
++    cache and availability set.
++    """
++
++    def __init__(
++        self,
++        vllm_config: "VllmConfig",
++        role: KVConnectorRole,
++        kv_cache_config: "KVCacheConfig",
++    ):
++        super().__init__(
++            vllm_config=vllm_config,
++            role=role,
++            kv_cache_config=kv_cache_config,
++        )
++        self._block_size = vllm_config.cache_config.block_size
++        self._requests_need_load: dict[str, Request] = {}
++
++        self._mode = self._kv_transfer_config.get_from_extra_config("mode", "server")
++        self._host = self._kv_transfer_config.get_from_extra_config("host", "127.0.0.1")
++        self._port = int(self._kv_transfer_config.get_from_extra_config("port", 12345))
++        # Wire dtype for KV transfer. "native" sends the stored dtype as-is;
++        # otherwise the tensor is cast to this torch dtype before sending.
++        self._wire_dtype = self._kv_transfer_config.get_from_extra_config(
++            "wire_dtype", "float32"
++        )
++        # Ablation switches, both default off. disable_save skips KV storage
++        # on the producer side (PD then degenerates to local prefill on the
++        # decode engine). save_timing logs per-layer copy/store breakdown.
++        self._disable_save = bool(
++            self._kv_transfer_config.get_from_extra_config("disable_save", False)
++        )
++        self._save_timing = bool(
++            self._kv_transfer_config.get_from_extra_config("save_timing", False)
++        )
++
++        self._socket: socket.socket | None = None
++        self._client_socks: list[socket.socket] = []
++
++        global _server_sock
++        if self._mode == "server":
++            # Only the worker instance binds the listening socket.
++            if role == KVConnectorRole.WORKER:
++                self._start_server()
++            else:
++                logger.info(
++                    "[MyPDTCPConnector] scheduler instance shares worker state"
++                )
++        else:
++            self._connect_client()
++
++        logger.info(
++            "[MyPDTCPConnector] role=%s mode=%s host=%s port=%d wire_dtype=%s "
++            "disable_save=%s save_timing=%s",
++            role.name,
++            self._mode,
++            self._host,
++            self._port,
++            self._wire_dtype,
++            self._disable_save,
++            self._save_timing,
++        )
++
++    # ==========================================================
++    # TCP helpers
++    # ==========================================================
++    def _start_server(self) -> None:
++        global _server_sock
++        if _server_sock is not None:
++            self._socket = _server_sock
++            logger.info("[MyPDTCPConnector] reusing existing server socket")
++            return
++
++        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
++        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
++        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
++        sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 16 * 1024 * 1024)
++        sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 16 * 1024 * 1024)
++        sock.bind((self._host, self._port))
++        sock.listen(8)
++        _server_sock = sock
++        self._socket = sock
++        t = threading.Thread(target=self._accept_loop, daemon=True)
++        t.start()
++
++    def _accept_loop(self) -> None:
++        global _server_sock
++        assert _server_sock is not None
++        while True:
++            conn, addr = _server_sock.accept()
++            conn.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
++            conn.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 16 * 1024 * 1024)
++            conn.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 16 * 1024 * 1024)
++            logger.info("[MyPDTCPConnector] server accepted connection from %s", addr)
++            t = threading.Thread(target=self._handle_client, args=(conn,), daemon=True)
++            t.start()
++
++    def _handle_client(self, conn: socket.socket) -> None:
++        try:
++            while True:
++                req = self._recv_msg(conn)
++                if req is None:
++                    break
++                msg_type = req.get("type")
++                if msg_type == "query":
++                    key = req["key"]
++                    with _lock:
++                        exists = key in _available_keys
++                    self._send_msg(conn, {"type": "reply", "exists": exists})
++                elif msg_type == "get":
++                    key = req["key"]
++                    layer_name = req["layer_name"]
++                    with _lock:
++                        tensor = _kv_cache.get((key, layer_name))
++                    if tensor is None:
++                        self._send_msg(conn, {"type": "kv", "found": False})
++                    else:
++                        # Cast to the configured wire dtype before
++                        # serializing; "native" sends the stored dtype as-is.
++                        wire_tensor = tensor
++                        if self._wire_dtype != "native":
++                            wire_tensor = tensor.to(
++                                getattr(torch, self._wire_dtype)
++                            )
++                        original_dtype = str(wire_tensor.dtype).split(".")[-1]
++                        raw_bytes = (
++                            wire_tensor.contiguous().view(torch.uint8).numpy().tobytes()
++                        )
++                        self._send_msg(
++                            conn,
++                            {
++                                "type": "kv",
++                                "found": True,
++                                "shape": list(tensor.shape),
++                                "dtype": original_dtype,
++                                "data": raw_bytes,
++                            },
++                        )
++                else:
++                    logger.warning("[MyPDTCPConnector] unknown msg type: %s", msg_type)
++        except ConnectionResetError:
++            pass
++        finally:
++            conn.close()
++
++    def _connect_client(self) -> None:
++        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
++        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
++        sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 16 * 1024 * 1024)
++        sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 16 * 1024 * 1024)
++        sock.connect((self._host, self._port))
++        self._socket = sock
++
++    def _send_msg(self, conn: socket.socket, payload: dict[str, Any]) -> None:
++        body = pickle.dumps(payload)
++        header = struct.pack(_HEADER_FMT, MAGIC, len(body))
++        conn.sendall(header + body)
++
++    def _recv_msg(self, conn: socket.socket) -> dict[str, Any] | None:
++        header = self._recv_all(conn, struct.calcsize(_HEADER_FMT))
++        if not header:
++            return None
++        magic, body_len = struct.unpack(_HEADER_FMT, header)
++        if magic != MAGIC:
++            raise ValueError(f"Bad magic: {magic}")
++        body = self._recv_all(conn, body_len)
++        if not body:
++            return None
++        return pickle.loads(body)
++
++    def _recv_all(self, conn: socket.socket, n: int) -> bytes:
++        buf = b""
++        while len(buf) < n:
++            chunk = conn.recv(n - len(buf))
++            if not chunk:
++                return b""
++            buf += chunk
++        return buf
++
++    def _query_key_exists(self, key: str) -> bool:
++        if self._mode == "server":
++            with _lock:
++                return key in _available_keys
++        assert self._socket is not None
++        self._send_msg(self._socket, {"type": "query", "key": key})
++        reply = self._recv_msg(self._socket)
++        assert reply is not None
++        return reply.get("exists", False)
++
++    def _fetch_kv(self, key: str, layer_name: str) -> torch.Tensor | None:
++        if self._mode == "server":
++            with _lock:
++                tensor = _kv_cache.get((key, layer_name))
++            return tensor
++
++        assert self._socket is not None
++        self._send_msg(self._socket, {"type": "get", "key": key, "layer_name": layer_name})
++        reply = self._recv_msg(self._socket)
++        assert reply is not None
++        if not reply.get("found"):
++            return None
++
++        shape = reply["shape"]
++        original_dtype = getattr(torch, reply["dtype"])
++
++        # Reinterpret the raw bytes in the dtype recorded by the server.
++        tensor = (
++            torch.frombuffer(reply["data"], dtype=torch.uint8)
++            .view(original_dtype)
++            .reshape(shape)
++            .clone()
++        )
++        return tensor
++
++    # ==========================================================
++    # Worker-side: load KV from TCP producer into vLLM buffer
++    # ==========================================================
++    def start_load_kv(
++        self, forward_context: "ForwardContext", **kwargs: Any
++    ) -> None:
++        """Called before model forward on the decode (consumer) worker."""
++
++        def inject_kv_into_layer(
++            dst_kv_cache_layer: torch.Tensor,
++            src_kv_cache: torch.Tensor,
++            slot_mapping: torch.Tensor,
++            attn_metadata: AttentionMetadata,
++        ) -> None:
++            slot_mapping = slot_mapping.to(
++                dst_kv_cache_layer.device, non_blocking=True
++            )
++            if isinstance(attn_metadata, MLACommonMetadata):
++                num_pages, page_size = dst_kv_cache_layer.shape[:2]
++                dst_kv_cache_layer = dst_kv_cache_layer.reshape(
++                    num_pages * page_size, -1
++                )
++                dst_kv_cache_layer[slot_mapping, ...] = src_kv_cache
++            else:
++                block_idxs = slot_mapping // self._block_size
++                offsets = slot_mapping % self._block_size
++                dst_kv_cache_layer[block_idxs, :, offsets] = src_kv_cache
++
++        metadata = self._get_connector_metadata()
++        assert isinstance(metadata, MyPDTCPConnectorMetadata)
++
++        attn_metadata = forward_context.attn_metadata
++        if attn_metadata is None:
++            logger.warning(
++                "[MyPDTCPConnector] start_load_kv called but attn_metadata is None"
++            )
++            return
++
++        for request in metadata.requests:
++            if request.is_store:
++                continue
++            ttft_event(
++                request.req_id,
++                "kv_load_start",
++                role="decode",
++                extra={"tokens": len(request.slot_mapping)},
++            )
++            logger.info(
++                "[MyPDTCPConnector] LOADING %d tokens from TCP into paged KV cache",
++                len(request.slot_mapping),
++            )
++            for layer_name in forward_context.no_compile_layers:
++                layer = forward_context.no_compile_layers[layer_name]
++                kv_cache_layer = getattr(layer, "kv_cache", None)
++                if kv_cache_layer is None:
++                    continue
++
++                key = self._make_key(request.token_ids, request.mm_hashes)
++                kv_cache_cpu = self._fetch_kv(key, layer_name)
++                if kv_cache_cpu is None:
++                    logger.warning(
++                        "[MyPDTCPConnector] missing KV for key=%s layer=%s",
++                        key,
++                        layer_name,
++                    )
++                    continue
++
++                kv_cache = kv_cache_cpu.to(
++                    device=kv_cache_layer.device,
++                    dtype=kv_cache_layer.dtype,
++                    non_blocking=True,
++                )
++                if isinstance(attn_metadata, dict):
++                    inject_kv_into_layer(
++                        kv_cache_layer,
++                        kv_cache,
++                        request.slot_mapping,
++                        attn_metadata[layer_name],
++                    )
++                    logger.info(
++                        "[MyPDTCPConnector] injected layer %s for request",
++                        layer_name,
++                    )
++            ttft_event(
++                request.req_id,
++                "kv_load_end",
++                role="decode",
++                extra={"tokens": len(request.slot_mapping)},
++            )
++
++    def wait_for_layer_load(self, layer_name: str) -> None:
++        return
++
++    # ==========================================================
++    # Worker-side: save KV from vLLM buffer to TCP consumers
++    # ==========================================================
++    def save_kv_layer(
++        self,
++        layer_name: str,
++        kv_layer: torch.Tensor,
++        attn_metadata: AttentionMetadata,
++        **kwargs: Any,
++    ) -> None:
++        """Called inside model forward on the prefill (producer) worker."""
++
++        def extract_kv_from_layer(
++            layer: torch.Tensor, slot_mapping: torch.Tensor
++        ) -> torch.Tensor:
++            slot_mapping = slot_mapping.to(layer.device, non_blocking=True)
++            if isinstance(attn_metadata, MLACommonMetadata):
++                num_pages, page_size = layer.shape[:2]
++                return layer.reshape(num_pages * page_size, -1)[
++                    slot_mapping, ...
++                ]
++            block_idxs = slot_mapping // self._block_size
++            offsets = slot_mapping % self._block_size
++            return layer[block_idxs, :, offsets]
++
++        connector_metadata = self._get_connector_metadata()
++        assert isinstance(connector_metadata, MyPDTCPConnectorMetadata)
++        for request in connector_metadata.requests:
++            if request.is_store:
++                if self._disable_save:
++                    if "layers.0." in layer_name:
++                        logger.info(
++                            "[MyPDTCPConnector] SAVE DISABLED req=%s tokens=%d",
++                            request.req_id,
++                            len(request.slot_mapping),
++                        )
++                    continue
++                key = self._make_key(request.token_ids, request.mm_hashes)
++                ttft_event(
++                    request.req_id,
++                    "kv_save_start",
++                    role="prefill",
++                    extra={"tokens": len(request.slot_mapping), "layer": layer_name},
++                )
++                kv_cache = extract_kv_from_layer(kv_layer, request.slot_mapping)
++                t0 = time.perf_counter()
++                with gpu_sync_allowed():
++                    kv_cache_cpu = kv_cache.detach().cpu()
++                t1 = time.perf_counter()
++                with _lock:
++                    _kv_cache[(key, layer_name)] = kv_cache_cpu
++                    _available_keys.add(key)
++                t2 = time.perf_counter()
++                if self._save_timing:
++                    logger.info(
++                        "[MyPDTCPConnector] SAVE_TIMING layer=%s "
++                        "copy=%.3fms store=%.3fms total=%.3fms",
++                        layer_name,
++                        (t1 - t0) * 1000,
++                        (t2 - t1) * 1000,
++                        (t2 - t0) * 1000,
++                    )
++                logger.info(
++                    "[MyPDTCPConnector] STORED key=%s layer=%s tokens=%d",
++                    key,
++                    layer_name,
++                    len(request.slot_mapping),
++                )
++                ttft_event(
++                    request.req_id,
++                    "kv_save_end",
++                    role="prefill",
++                    extra={"tokens": len(request.slot_mapping), "layer": layer_name},
++                )
++
++    def wait_for_save(self) -> None:
++        return
++
++    # ==========================================================
++    # Scheduler-side: decide what KV can be reused
++    # ==========================================================
++    def get_num_new_matched_tokens(
++        self,
++        request: "Request",
++        num_computed_tokens: int,
++    ) -> tuple[int | None, bool]:
++        if not self._found_match_for_request(request):
++            return 0, False
++
++        logger.info(
++            "[MyPDTCPConnector] CACHE HIT for request %s", request.request_id
++        )
++        token_ids = request.prompt_token_ids or []
++        num_tokens_to_check = align_to_block_size(
++            len(token_ids), self._block_size
++        )
++        return num_tokens_to_check - num_computed_tokens, False
++
++    def update_state_after_alloc(
++        self,
++        request: "Request",
++        blocks: "KVCacheBlocks",
++        num_external_tokens: int,
++    ) -> None:
++        if num_external_tokens > 0:
++            self._requests_need_load[request.request_id] = request
++
++    def build_connector_meta(
++        self,
++        scheduler_output: SchedulerOutput,
++    ) -> KVConnectorMetadata:
++        meta = MyPDTCPConnectorMetadata()
++
++        total_need_load = 0
++        for new_req in scheduler_output.scheduled_new_reqs:
++            token_ids = new_req.prompt_token_ids or []
++            mm_hashes = [f.identifier for f in new_req.mm_features]
++            if new_req.req_id in self._requests_need_load:
++                meta.add_request(
++                    req_id=new_req.req_id,
++                    token_ids=token_ids,
++                    block_ids=new_req.block_ids[0],
++                    block_size=self._block_size,
++                    is_store=False,
++                    mm_hashes=mm_hashes,
++                )
++                total_need_load += 1
++                logger.info(
++                    "[MyPDTCPConnector] SCHEDULE LOAD request=%s tokens=%d",
++                    new_req.req_id,
++                    len(token_ids),
++                )
++                ttft_event(
++                    new_req.req_id,
++                    "connector_decision_load",
++                    role="scheduler",
++                    extra={"tokens": len(token_ids)},
++                )
++            else:
++                if not self._found_match_for_prompt(token_ids, mm_hashes):
++                    meta.add_request(
++                        req_id=new_req.req_id,
++                        token_ids=token_ids,
++                        block_ids=new_req.block_ids[0],
++                        block_size=self._block_size,
++                        is_store=True,
++                        mm_hashes=mm_hashes,
++                    )
++                    logger.info(
++                        "[MyPDTCPConnector] SCHEDULE STORE request=%s tokens=%d",
++                        new_req.req_id,
++                        len(token_ids),
++                    )
++                    ttft_event(
++                        new_req.req_id,
++                        "connector_decision_store",
++                        role="scheduler",
++                        extra={"tokens": len(token_ids)},
++                    )
++
++        cached_reqs = scheduler_output.scheduled_cached_reqs
++        for i, req_id in enumerate(cached_reqs.req_ids):
++            resumed_from_preemption = req_id in cached_reqs.resumed_req_ids
++            if not resumed_from_preemption or req_id not in self._requests_need_load:
++                continue
++
++            num_computed_tokens = cached_reqs.num_computed_tokens[i]
++            num_new_tokens = scheduler_output.num_scheduled_tokens[req_id]
++            new_block_ids = cached_reqs.new_block_ids[i]
++            request = self._requests_need_load[req_id]
++            total_tokens = num_computed_tokens + num_new_tokens
++            token_ids = request.all_token_ids[:total_tokens]
++            assert new_block_ids is not None
++            block_ids = new_block_ids[0]
++
++            meta.add_request(
++                req_id=request.request_id,
++                token_ids=token_ids,
++                block_ids=block_ids,
++                block_size=self._block_size,
++                is_store=False,
++                mm_hashes=[f.identifier for f in request.mm_features],
++            )
++            total_need_load += 1
++
++        assert total_need_load == len(self._requests_need_load)
++        self._requests_need_load.clear()
++        return meta
++
++    # ==========================================================
++    # Helpers
++    # ==========================================================
++    def _found_match_for_request(self, request: "Request") -> bool:
++        return self._found_match_for_prompt(
++            list(request.prompt_token_ids or []),
++            [f.identifier for f in request.mm_features],
++        )
++
++    def _found_match_for_prompt(
++        self,
++        prompt_token_ids: list[int],
++        mm_hashes: list[str],
++    ) -> bool:
++        # Must match the producer's store-side alignment in
++        # MyPDTCPReqMeta.make_meta, otherwise the keys diverge whenever
++        # len(prompt_token_ids) % block_size == 1.
++        num_tokens_to_check = align_to_block_size(
++            len(prompt_token_ids), self._block_size
++        )
++        key = self._make_key(
++            torch.tensor(prompt_token_ids)[:num_tokens_to_check],
++            mm_hashes,
++        )
++        return self._query_key_exists(key)
++
++    def _make_key(
++        self,
++        token_ids: torch.Tensor,
++        mm_hashes: list[str],
++    ) -> str:
++        token_bytes = token_ids.numpy().tobytes()
++        if mm_hashes:
++            mm_str = "-".join(mm_hashes)
++            token_bytes += mm_str.encode("utf-8")
++        return safe_hash(token_bytes, usedforsecurity=False).hexdigest()
++
++
++def align_to_block_size(num_tokens: int, block_size: int) -> int:
++    """Round down to the nearest multiple of block_size."""
++    return (num_tokens - 1) // block_size * block_size
+diff --git a/vllm/ttft_logger.py b/vllm/ttft_logger.py
+new file mode 100644
+index 0000000000..7e2f8f651f
+--- /dev/null
++++ b/vllm/ttft_logger.py
+@@ -0,0 +1,19 @@
++import json
++import time
++
++from vllm.logger import init_logger
++
++_logger = init_logger(__name__)
++
++
++def ttft_event(req_id, event, role="engine", extra=None):
++    entry = {
++        "ts_ns": time.perf_counter_ns(),
++        "event": event,
++        "role": role,
++    }
++    if req_id is not None:
++        entry["req_id"] = req_id
++    if extra:
++        entry.update(extra)
++    _logger.info("[TTFT] %s", json.dumps(entry, ensure_ascii=False))
+\ No newline at end of file
+-- 
+2.43.0
+
