@@ -1,0 +1,37 @@
+From 47a390be3e076944bb0932334309a33312086221 Mon Sep 17 00:00:00 2001
+From: wuzichun <wuzichun@users.noreply.github.com>
+Date: Fri, 9 Oct 2026 09:32:21 +0000
+Subject: [PATCH 5/5] [experiment] gather: allocate 1 slot on producer side
+ (role-aware registration)
+
+Consumer keeps VLLM_MOONCAKE_GATHER_SLOTS slots; the producer only ever
+uses slot 0 under _gather_lock (D2H gather staging), so it now allocates
+a single slot and saves (K-1) x 512MiB pinned memory.
+---
+ .../kv_connector/v1/mooncake/mooncake_connector.py          | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/vllm/distributed/kv_transfer/kv_connector/v1/mooncake/mooncake_connector.py b/vllm/distributed/kv_transfer/kv_connector/v1/mooncake/mooncake_connector.py
+index d7b5c44e27..ae3dc3cd00 100644
+--- a/vllm/distributed/kv_transfer/kv_connector/v1/mooncake/mooncake_connector.py
++++ b/vllm/distributed/kv_transfer/kv_connector/v1/mooncake/mooncake_connector.py
+@@ -2092,12 +2092,14 @@ class MooncakeConnectorWorker:
+         writes directly into the slot outside any lock, so concurrent pulls
+         sharing a single buffer would silently corrupt each other's KV
+         (observed as garbage output under 2P1D load). The producer side only
+-        ever uses slot 0, serialized by _gather_lock.
++        ever uses slot 0, serialized by _gather_lock, so it allocates a
++        single slot regardless of VLLM_MOONCAKE_GATHER_SLOTS.
+         """
+         if self._gather_buf_bytes <= 0:
+             return
++        num_slots = self._gather_slot_count if self.is_kv_consumer else 1
+         try:
+-            for _ in range(self._gather_slot_count):
++            for _ in range(num_slots):
+                 buf = torch.empty(
+                     self._gather_buf_bytes, dtype=torch.uint8, pin_memory=True
+                 )
+-- 
+2.43.0
+

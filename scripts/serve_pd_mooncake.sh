@@ -14,6 +14,9 @@ export MC_TCP_GPU_STAGING_SLOTS=4
 if [ -n "$GATHER" ]; then
   export VLLM_MOONCAKE_GATHER=1
   export VLLM_MOONCAKE_GATHER_BUF_MB=${GATHER_BUF_MB:-512}
+  # 定 K 实验结论（2026-10-09，五档 1/2/4/8/16）：K 须 ≥ 峰值并发 pull 数，
+  # 16 并发下 K=16 才零降级（降级 = 逐描述符老路慢 100 倍）
+  export VLLM_MOONCAKE_GATHER_SLOTS=${GATHER_SLOTS:-16}
 fi
 export HF_HUB_OFFLINE=1
 export VLLM_LOGGING_LEVEL=DEBUG  # 真实性核验用：decode 侧逐请求 "pulling kv_caches ... finished"
@@ -41,6 +44,17 @@ case "$1" in
       --kv-transfer-config "${MOONCAKE_CFG/ROLE/kv_producer}" \
       "${PROF_ARGS[@]}"
     ;;
+  prefill2)
+    # 第二个 P 实例（2P1D 拓扑 / 并发污染复现用）：GPU0、端口 8101、bootstrap 8999
+    CUDA_VISIBLE_DEVICES=0 VLLM_MOONCAKE_BOOTSTRAP_PORT=8999 "$VLLM" serve "$MODEL" \
+      --port 8101 \
+      --enforce-eager \
+      --gpu-memory-utilization 0.85 \
+      --max-num-batched-tokens 32768 \
+      --no-enable-prefix-caching \
+      --kv-transfer-config "${MOONCAKE_CFG/ROLE/kv_producer}" \
+      "${PROF_ARGS[@]}"
+    ;;
   decode)
     CUDA_VISIBLE_DEVICES=2 "$VLLM" serve "$MODEL" \
       --port 8200 \
@@ -53,6 +67,14 @@ case "$1" in
   proxy)
     exec "$PYTHON" "$REPO/examples/disaggregated/mooncake_connector/mooncake_connector_proxy.py" \
       --prefill "http://127.0.0.1:8100" 8998 \
+      --decode "http://127.0.0.1:8200" \
+      --port 8000
+    ;;
+  proxy2p)
+    # 2P1D 拓扑的 proxy：双 prefill 轮询
+    exec "$PYTHON" "$REPO/examples/disaggregated/mooncake_connector/mooncake_connector_proxy.py" \
+      --prefill "http://127.0.0.1:8100" 8998 \
+      --prefill "http://127.0.0.1:8101" 8999 \
       --decode "http://127.0.0.1:8200" \
       --port 8000
     ;;

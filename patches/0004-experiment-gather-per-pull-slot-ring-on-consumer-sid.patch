@@ -1,0 +1,274 @@
+From c656a95db9742812b248540fa959aa68c5dac978 Mon Sep 17 00:00:00 2001
+From: wuzichun <wuzichun@users.noreply.github.com>
+Date: Wed, 30 Sep 2026 08:48:25 +0000
+Subject: [PATCH 4/5] [experiment] gather: per-pull slot ring on consumer side
+ (fix KV corruption under concurrent pulls)
+
+Consumer allocates VLLM_MOONCAKE_GATHER_SLOTS (default 4) pinned slots and
+advertises one free slot per pull; slot returned after scatter (finally).
+Empty pool -> advertise addr=0 and the producer falls back to per-descriptor
+transfer. Verified: 2P1D x 16 concurrent distinct prompts, zero garbage
+outputs (was 2/16 garbage + 15/16 diverged before the fix).
+
+Co-authored-by: Kimi Code <noreply@moonshot.cn>
+---
+ .../v1/mooncake/mooncake_connector.py         | 96 +++++++++++++------
+ vllm/envs.py                                  | 12 ++-
+ vllm/v1/core/sched/scheduler.py               |  1 +
+ 3 files changed, 76 insertions(+), 33 deletions(-)
+
+diff --git a/vllm/distributed/kv_transfer/kv_connector/v1/mooncake/mooncake_connector.py b/vllm/distributed/kv_transfer/kv_connector/v1/mooncake/mooncake_connector.py
+index a7c947389e..d7b5c44e27 100644
+--- a/vllm/distributed/kv_transfer/kv_connector/v1/mooncake/mooncake_connector.py
++++ b/vllm/distributed/kv_transfer/kv_connector/v1/mooncake/mooncake_connector.py
+@@ -1086,16 +1086,21 @@ class MooncakeConnectorWorker:
+         self.device_kv_caches: dict[str, torch.Tensor] = {}
+         self.reqs_need_send: dict[TransferId, SendBlockMeta] = {}
+ 
+-        # Pinned staging buffer for the single-descriptor gather path
++        # Pinned staging buffers for the single-descriptor gather path
+         # (VLLM_MOONCAKE_GATHER). Allocated and registered with the transfer
+-        # engine in register_kv_caches(); the consumer advertises its base
+-        # address through MooncakeXferMetadata.
++        # engine in register_kv_caches(); the consumer advertises a free
++        # slot's base address per pull through MooncakeXferMetadata.
+         self._gather_buf_bytes = (
+             envs.VLLM_MOONCAKE_GATHER_BUF_MB * 1024 * 1024
+             if envs.VLLM_MOONCAKE_GATHER
+             else 0
+         )
++        self._gather_slot_count = (
++            envs.VLLM_MOONCAKE_GATHER_SLOTS if envs.VLLM_MOONCAKE_GATHER else 0
++        )
+         self._gather_buffer: torch.Tensor | None = None
++        self._gather_buffers: list[torch.Tensor] = []
++        self._gather_free_slots: list[int] = []
+         self._gather_lock = threading.Lock()
+         self._gather_broken = False
+         self._gather_regions_by_key: dict[tuple[str, int], TransferRegion] = {}
+@@ -2000,6 +2005,7 @@ class MooncakeConnectorWorker:
+         self,
+         manifests: dict[ReqId, MooncakeGatherManifest],
+         pull_metas: dict[ReqId, PullReqMeta],
++        slot_idx: int | None = None,
+     ) -> set[ReqId]:
+         """Scatter gather-buffer bytes back into local GPU KV blocks.
+ 
+@@ -2008,17 +2014,18 @@ class MooncakeConnectorWorker:
+         Returns the set of requests whose scatter failed; those are not
+         marked finished.
+         """
+-        if self._gather_buffer is None:
++        if slot_idx is None or slot_idx >= len(self._gather_buffers):
+             logger.error(
+-                "Received gather manifests but no gather buffer is registered; "
+-                "affected requests will not complete: %s",
++                "Received gather manifests but no valid gather slot "
++                "(slot_idx=%s); affected requests will not complete: %s",
++                slot_idx,
+                 sorted(manifests),
+             )
+             return set(manifests)
+         failed: set[ReqId] = set()
+         current_platform.set_device(self.device_id)
+         with self._gather_lock:
+-            buf = self._gather_buffer
++            buf = self._gather_buffers[slot_idx]
+             total_bytes = 0
+             num_segments = 0
+             for req_id, manifest in manifests.items():
+@@ -2079,16 +2086,27 @@ class MooncakeConnectorWorker:
+         return failed
+ 
+     def _register_gather_buffer(self) -> None:
+-        """Allocate the pinned gather buffer and register it with Mooncake."""
++        """Allocate the pinned gather buffers and register them with Mooncake.
++
++        The consumer side needs one slot per in-flight pull: the network
++        writes directly into the slot outside any lock, so concurrent pulls
++        sharing a single buffer would silently corrupt each other's KV
++        (observed as garbage output under 2P1D load). The producer side only
++        ever uses slot 0, serialized by _gather_lock.
++        """
+         if self._gather_buf_bytes <= 0:
+             return
+         try:
+-            buf = torch.empty(
+-                self._gather_buf_bytes, dtype=torch.uint8, pin_memory=True
+-            )
+-            ret_value = self.engine.register_memory(buf.data_ptr(), buf.numel())
+-            if ret_value != 0:
+-                raise RuntimeError(f"register_memory returned {ret_value}")
++            for _ in range(self._gather_slot_count):
++                buf = torch.empty(
++                    self._gather_buf_bytes, dtype=torch.uint8, pin_memory=True
++                )
++                ret_value = self.engine.register_memory(
++                    buf.data_ptr(), buf.numel()
++                )
++                if ret_value != 0:
++                    raise RuntimeError(f"register_memory returned {ret_value}")
++                self._gather_buffers.append(buf)
+         except Exception as e:
+             logger.warning(
+                 "Mooncake gather buffer setup failed (%s); "
+@@ -2096,13 +2114,17 @@ class MooncakeConnectorWorker:
+                 e,
+             )
+             self._gather_buf_bytes = 0
++            self._gather_buffers = []
+             self._gather_buffer = None
++            self._gather_free_slots = []
+             return
+-        self._gather_buffer = buf
++        self._gather_buffer = self._gather_buffers[0]
++        self._gather_free_slots = list(range(len(self._gather_buffers)))
+         logger.info(
+-            "Mooncake gather buffer: %d MiB pinned at %#x",
++            "Mooncake gather buffers: %d x %d MiB pinned, slot0 at %#x",
++            len(self._gather_buffers),
+             self._gather_buf_bytes >> 20,
+-            buf.data_ptr(),
++            self._gather_buffer.data_ptr(),
+         )
+ 
+     def _build_gather_region_lookup(self) -> None:
+@@ -2298,6 +2320,18 @@ class MooncakeConnectorWorker:
+         pull_metas: dict[ReqId, PullReqMeta],
+     ):
+         req_ids = set(pull_metas)
++        # 每次 pull 领一个空闲接收槽：网络直接写槽（无锁），槽复用必须等
++        # 上一批 scatter 完。没空闲槽就广播 addr=0，P 自动回退逐描述符路径。
++        slot_idx: int | None = None
++        if self._gather_buffers:
++            with self._gather_lock:
++                if self._gather_free_slots:
++                    slot_idx = self._gather_free_slots.pop()
++        gather_addr = 0
++        gather_size = 0
++        if slot_idx is not None:
++            gather_addr = self._gather_buffers[slot_idx].data_ptr()
++            gather_size = self._gather_buf_bytes
+         metadata = MooncakeXferMetadata(
+             remote_hostname=self.hostname,
+             remote_port=self.rpc_port,
+@@ -2313,14 +2347,8 @@ class MooncakeConnectorWorker:
+             registered_layer_names=self.registered_layer_names,
+             registered_layer_indices=self.registered_layer_indices,
+             registered_group_indices=self.registered_group_indices,
+-            gather_buffer_addr=(
+-                self._gather_buffer.data_ptr()
+-                if self._gather_buffer is not None
+-                else 0
+-            ),
+-            gather_buffer_size=(
+-                self._gather_buf_bytes if self._gather_buffer is not None else 0
+-            ),
++            gather_buffer_addr=gather_addr,
++            gather_buffer_size=gather_size,
+         )
+ 
+         encoded_data = self._encoder.encode(metadata)
+@@ -2342,9 +2370,10 @@ class MooncakeConnectorWorker:
+                 )
+                 await sock.send(encoded_data)
+                 logger.info(
+-                    "[XDBG] D_SEND_PULL t=%d reqs=%s",
++                    "[XDBG] D_SEND_PULL t=%d reqs=%s slot=%s",
+                     time.time_ns(),
+                     sorted(req_ids),
++                    slot_idx,
+                 )
+                 while True:
+                     ret_msg = await sock.recv()
+@@ -2357,7 +2386,7 @@ class MooncakeConnectorWorker:
+                         )
+                         self.xfer_stats.record_failed_recv()
+                         return
+-                    self.process_pulling_result(response, pull_metas)
++                    self.process_pulling_result(response, pull_metas, slot_idx)
+                     if response.status == MooncakeXferResponseStatus.FINISH:
+                         break
+         except zmq.ContextTerminated:
+@@ -2366,11 +2395,16 @@ class MooncakeConnectorWorker:
+             logger.error("MooncakeXferMetadata transfer failed for %s: %s", req_ids, e)
+             self.xfer_stats.record_failed_recv()
+             return
++        finally:
++            if slot_idx is not None:
++                with self._gather_lock:
++                    self._gather_free_slots.append(slot_idx)
+ 
+     def process_pulling_result(
+         self,
+         response: MooncakeXferResponse,
+         pull_metas: dict[ReqId, PullReqMeta],
++        slot_idx: int | None = None,
+     ):
+         ok_reqs: list[ReqId] = response.ok_reqs or []
+         logger.info(
+@@ -2381,11 +2415,11 @@ class MooncakeConnectorWorker:
+ 
+         failed_scatter: set[ReqId] = set()
+         if response.gather_manifests:
+-            # The KV bytes of these requests are sitting in the pinned gather
+-            # buffer; scatter them into the GPU blocks BEFORE marking the
+-            # requests as received.
++            # The KV bytes of these requests are sitting in this pull's
++            # pinned gather slot; scatter them into the GPU blocks BEFORE
++            # marking the requests as received.
+             failed_scatter = self._scatter_gathered_buffer(
+-                response.gather_manifests, pull_metas
++                response.gather_manifests, pull_metas, slot_idx
+             )
+ 
+         for req_id in ok_reqs:
+diff --git a/vllm/envs.py b/vllm/envs.py
+index 3fb690952a..d193737906 100755
+--- a/vllm/envs.py
++++ b/vllm/envs.py
+@@ -255,6 +255,7 @@ if TYPE_CHECKING:
+     VLLM_MOONCAKE_ABORT_REQUEST_TIMEOUT: int = 480
+     VLLM_MOONCAKE_GATHER: bool = False
+     VLLM_MOONCAKE_GATHER_BUF_MB: int = 512
++    VLLM_MOONCAKE_GATHER_SLOTS: int = 4
+     VLLM_ENABLE_CUDAGRAPH_GC: bool = False
+     VLLM_LOOPBACK_IP: str = ""
+     VLLM_ALLOW_CHUNKED_LOCAL_ATTN_WITH_HYBRID_KV_CACHE: bool = True
+@@ -1815,12 +1816,19 @@ environment_variables: dict[str, Callable[[], Any]] = {
+     # instead of one descriptor per contiguous block run. Both sides must
+     # opt in for the path to activate.
+     "VLLM_MOONCAKE_GATHER": lambda: bool(int(os.getenv("VLLM_MOONCAKE_GATHER", "0"))),
+-    # Size in MiB of the per-worker pinned gather buffer used by
+-    # VLLM_MOONCAKE_GATHER. Transfer batches larger than the buffer fall
++    # Size in MiB of one pinned gather buffer slot used by
++    # VLLM_MOONCAKE_GATHER. Transfer batches larger than the slot fall
+     # back to per-descriptor transfer.
+     "VLLM_MOONCAKE_GATHER_BUF_MB": lambda: int(
+         os.getenv("VLLM_MOONCAKE_GATHER_BUF_MB", "512")
+     ),
++    # Number of gather buffer slots. The consumer hands out one slot per
++    # in-flight pull (the network writes into it outside any lock); when
++    # all slots are busy the pull advertises addr=0 and the producer falls
++    # back to per-descriptor transfer.
++    "VLLM_MOONCAKE_GATHER_SLOTS": lambda: int(
++        os.getenv("VLLM_MOONCAKE_GATHER_SLOTS", "4")
++    ),
+     # If set, it means we pre-downloaded cubin files and flashinfer will
+     # read the cubin files directly.
+     "VLLM_HAS_FLASHINFER_CUBIN": lambda: bool(
+diff --git a/vllm/v1/core/sched/scheduler.py b/vllm/v1/core/sched/scheduler.py
+index 46fde1317d..898306e249 100644
+--- a/vllm/v1/core/sched/scheduler.py
++++ b/vllm/v1/core/sched/scheduler.py
+@@ -2430,6 +2430,7 @@ class Scheduler(SchedulerInterface):
+         self, request: Request, delay_free_blocks: bool = False
+     ) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+         assert request.is_finished()
++        ttft_event(request.request_id, "free_request", role="scheduler")
+ 
+         self._inflight_prefills.discard(request)
+         connector_delay_free_blocks, kv_xfer_params = self._connector_finished(request)
+-- 
+2.43.0
+
