@@ -1,0 +1,27 @@
+M1（P 侧多槽 gather + async 提交）A/B 原始记录 2026-10-10
+栈：2P1D，GATHER=1，VLLM_MOONCAKE_GATHER_SLOTS=16，512MiB/槽，
+MC_TCP_LANES_PER_PEER=16，MC_TCP_SLICE_SIZE=1MB，MC_TCP_IO_THREADS=16（脚本默认）
+负载：32 请求/并发 16/16000 字符/max_tokens=32（run_load_test.sh 固定参数）
+完整引擎日志见同目录 *.log.gz（A1_*=旧代码 stash 对照，M1_*=新代码）
+
+客户端 TTFT（ms）：
+B 组（新代码，multi-slot + batch_transfer_async_write + 事件循环轮询）：
+  seed=567: n=32 fail=0 mean=1749.07 p50=1758.58 p90=1791.38 p99=1805.50 min=1669.20 max=1806.14
+  seed=123: n=32 fail=0 mean=1823.02 p50=1793.98 p90=1911.56 p99=1915.51 min=1591.13 max=1916.54
+  seed=888: n=32 fail=0 mean=1870.08 p50=1860.49 p90=1918.37 p99=1932.04 min=1778.24 max=1936.43
+A 组（旧代码，1 槽 + _gather_lock 全局串行 + sync spin，同轮 git stash 对照）：
+  seed=567: n=32 fail=0 mean=1680.27 p50=1637.92 p90=2080.73 p99=2198.14 min=543.46 max=2211.03
+  seed=123: n=32 fail=0 mean=1637.94 p50=1592.76 p90=2073.70 p99=2205.94 min=511.92 max=2223.44
+  seed=888: n=32 fail=0 mean=1703.83 p50=1665.99 p90=2092.73 p99=2208.51 min=526.60 max=2216.33
+p50 均值：A=1632.2  B=1804.4（B 慢 +172ms）；p90 均值：A=2082.4  B=1907.1（B 快 -175ms）
+
+相位（XDBG 打点，FIFO 配对，每流 148MB 单描述符）：
+B 组：gather→submit p50=1.3/2.0ms（P1/P2），wire P_SEND_EXEC→DONE p50=167.4/179.2ms
+A 组：wire p50=80.8/83.2ms（串行独占带宽）
+→ 锁排队确实消失，但并行传输把单流带宽摊薄 ~2.1x，端到端相抵。
+
+生效证据：
+- B 组 P_SEND_EXEC==P_SEND_DONE==103/103（52+51，两 P），无超时无泄漏告警
+- 全轮（含 3 seed 压测 + 冒烟）fallback 日志零条（no free slot / falling back / gather failed 均无）
+- P 侧日志 "Mooncake gather buffers: 16 x 512 MiB"（新代码）vs A 组 "1 x 512 MiB"（旧代码）
+- 冒烟请求输出中文连贯无乱码；压测 192 请求 fail=0

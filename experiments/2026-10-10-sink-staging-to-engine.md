@@ -1,6 +1,6 @@
 # 下沉方案设计：gather/staging 所有权从 vLLM connector 移到 Mooncake 引擎（10-10）
 
-状态：**设计稿（未开工）**　操作人：wuzichun
+状态：**M1 已完成并出数（10-10）**　操作人：wuzichun
 
 ## 1. 动机（实证，不是拍脑袋）
 
@@ -130,3 +130,84 @@ prepareTransfer 依赖，改它 ABI 风险大）：
 - 叙事对齐 RFC #4242（owner 侧 gather/staging）：TCP+PD 数据可作证据；
 - vLLM 侧 M1 的改动是 connector 内部实现细节（async 调用替换 sync），
   上游可收性低但独立有用，可先行验证收益再定去向。
+
+---
+
+## 8. M1 实施记录（10-10 完成）
+
+### 8.1 实现
+
+只改 `mooncake_connector.py` 一个文件，三处：
+
+1. `_register_gather_buffer`：P 侧也开 K 槽（去掉 `is_kv_consumer` 分支），
+   日志确认 "16 x 512 MiB pinned"。
+2. 旧 `_gather_and_send_blocks` 拆成两个函数：
+   - `_gather_to_slot(gather_plan, req_order)`：同步，跑在 sender executor。
+     `_gather_lock` 内只做 `_gather_free_slots.pop()`（锁只护空闲表）；
+     gather 主循环、manifest、P_GATHER_DONE 打点原样搬移，写
+     `self._gather_buffers[slot_idx]`，torch.cuda.synchronize() 后返回
+     `(slot_idx, manifests, total_bytes)`；异常时还槽 + `_gather_broken=True`。
+   - `_gather_and_send_blocks_async(...)`：先 executor 跑 gather，然后
+     `engine.batch_transfer_async_write(...)` 拿 batch_id（0=失败），
+     事件循环里每 1ms 轮询 `transfer_check_status(batch_id)`
+     （1=完成已 free，-1=失败已 free，-2=timeout，0=进行中；300s 上限后
+     放弃并 error——batch 无 free API 会泄漏，manifests 丢弃保证 D 不
+     scatter 脏数据）；finally 还槽。XDBG 口径不变：提交打 P_SEND_EXEC
+     descs=1，完成打 P_SEND_DONE ret=0。
+3. 调用点（send 协程里）从 `run_in_executor(_gather_and_send_blocks)` 改成
+   直接 `await self._gather_and_send_blocks_async(...)`；ret=None 时逐描述符
+   fallback（`_send_blocks`）不动。
+
+### 8.2 环境
+
+2P1D（Qwen2.5-7B bf16，TCP，GPU0/1=P，GPU2=D），GATHER=1，
+GATHER_SLOTS=16，512MiB/槽，LANES=16，SLICE=1MB，IO_THREADS=16（脚本默认）。
+B 组=新代码；A 组=同轮 `git stash` 回旧代码重起栈（P 侧日志回退为
+"1 x 512 MiB"，确认对照成立）。seed 567/123/888，32 请求/并发 16/16k 字符。
+
+### 8.3 结果（客户端 TTFT，ms）
+
+| 组 | seed | mean | p50 | p90 | p99 | min | max |
+|----|------|------|-----|-----|-----|-----|-----|
+| A 旧 | 567 | 1680.3 | 1637.9 | 2080.7 | 2198.1 | 543.5 | 2211.0 |
+| A 旧 | 123 | 1637.9 | 1592.8 | 2073.7 | 2205.9 | 511.9 | 2223.4 |
+| A 旧 | 888 | 1703.8 | 1666.0 | 2092.7 | 2208.5 | 526.6 | 2216.3 |
+| B 新 | 567 | 1749.1 | 1758.6 | 1791.4 | 1805.5 | 1669.2 | 1806.1 |
+| B 新 | 123 | 1823.0 | 1794.0 | 1911.6 | 1915.5 | 1591.1 | 1916.5 |
+| B 新 | 888 | 1870.1 | 1860.5 | 1918.4 | 1932.0 | 1778.2 | 1936.4 |
+
+p50 均值 A=1632.2 / B=1804.4（**B 慢 +172ms**）；p90 均值 A=2082.4 /
+B=1907.1（**B 快 -175ms**）；分布形态从 A 的双峰（队头 540ms/队尾 2.2s）
+变成 B 的窄带（1.6-1.9s）。
+
+### 8.4 相位归因（XDBG FIFO 配对，每流 ~148MB）
+
+- B 组 gather→submit（锁排队替代指标）p50=1.3/2.0ms（两 P）——
+  旧代码实测 640-760ms 的 `_gather_lock` 排队**确认消失**；
+- wire（P_SEND_EXEC→DONE）：A 组 p50=80.8/83.2ms（串行独占带宽，
+  ~1.8GB/s）vs B 组 p50=167.4/179.2ms（并发流摊薄，~870MB/s/流）——
+  单流传输时间 ×2.1，正好吃掉省下的排队时间还倒贴。
+
+### 8.5 结论（修正 §1 的判断）
+
+**M1 机制目标达成但端到端无收益**：锁排队是真瓶颈没错（确实消掉了），
+但在当前负载（16 并发 × 148MB）下，并行传输摊薄单流 TCP 带宽，两者
+相抵。P 侧锁已经不是端到端 TTFT 的净瓶颈——真正的墙是**传输聚合带宽**
+（T8 lanes/chunk 线）。M2 如果只做"引擎内 gather+流水"，同样会撞这堵墙；
+M2 的价值主张要改写：要么把 lanes/chunk/io 线程调优并进 M2 验证
+（预期一并治愈 N=16 单流回退），要么先单独把聚合带宽提上去再谈下沉。
+
+### 8.6 生效证据 checklist
+
+- [x] P_SEND_EXEC 计数 = pull 数（103/103，两 P 合计，3 seed+冒烟）
+- [x] 降级≈0：全轮 fallback 日志零条（no free slot / falling back /
+      gather failed 均无）
+- [x] 无 all slots busy / exceeds slot capacity WARNING
+- [x] 192 压测请求 fail=0，冒烟中文连贯无乱码（T1 式抽检）
+- [x] 原始档入 results/raw/M1/（summary.txt + 8 份日志 gz）
+
+### 8.7 遗留
+
+- 轮询上限 300s 后 batch 泄漏（binding 无 free API，error 日志已注明）；
+- `dissect_gather.py` 假设事件不交错，M1 并发下会 KeyError——
+  分析时用 FIFO 聚合口径（§8.4），脚本待适配多槽并发。
