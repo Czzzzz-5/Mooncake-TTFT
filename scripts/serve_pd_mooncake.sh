@@ -9,6 +9,15 @@ export MC_TCP_MAX_PENDING_ADMISSIONS_PER_PEER=65535
 # （2026-09-15 教训：默认 16MB 导致 acquire 静默回退 legacy，优化全程未生效，见 ttft_report_serving_mooncake_bf16_gpustaging.md）
 export MC_TCP_GPU_STAGING_SLOT_MB=192
 export MC_TCP_GPU_STAGING_SLOTS=4
+# T8 诊断（2026-10-09，transfer 引擎并发模型调查）：默认 4 lanes/peer 把并发
+# clamp 在 4，且 64KB chunk 无流水；16 并发聚合带宽实测仅 ~720MB/s。
+# 提到 16 lanes + 1MB chunk 让并发传输真并行（代码证据：
+# tcp_transport.h:286 lanes_per_peer、session_impl.h:1037 chunk 串行）
+export MC_TCP_LANES_PER_PEER=${MC_TCP_LANES_PER_PEER:-16}
+export MC_TCP_SLICE_SIZE=${MC_TCP_SLICE_SIZE:-1048576}
+# T8 补丁（fork commit）：io_context 多线程化，解"单 io 线程 ~800MB/s 聚合顶"
+# （MC_TCP_IO_THREADS，默认 1=上游行为；本机 224 核开 16）
+export MC_TCP_IO_THREADS=${MC_TCP_IO_THREADS:-16}
 # v2a gather 合批（B 组）：GATHER=1 bash serve_pd_mooncake.sh ... 启用；
 # 双端必须同时开（D 端用 buffer 基址交换，P 端没收到广告会自动回退 v1）
 if [ -n "$GATHER" ]; then

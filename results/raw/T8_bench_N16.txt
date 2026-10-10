@@ -1,0 +1,8 @@
+=== T8 bench N=16 push 115MB x8 (Sat Oct 10 07:34:45 AM UTC 2026) ===
+[client] target=127.0.0.1:15185 remote_base=0x7044c3fff010 local=0x760743fff010 buf=cpu dir=push
+[client] buf=cpu dir=push size=115 MB descs=1 | avg=   1408 MB/s (  81.9 ms) | median=   1400 | min=   1325 | max=   1537 | n=8
+[client] done
+=== pull ===
+[client] target=127.0.0.1:15185 remote_base=0x7044c3fff010 local=0x78503ffff010 buf=cpu dir=pull
+[client] buf=cpu dir=pull size=115 MB descs=1 | avg=   1731 MB/s (  66.9 ms) | median=   1737 | min=   1512 | max=   1894 | n=8
+[client] done

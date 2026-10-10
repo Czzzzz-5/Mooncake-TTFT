@@ -1,0 +1,10 @@
+=== T8 并发聚合 8x16MB, server N=16 (Sat Oct 10 07:35:40 AM UTC 2026) ===
+wall=2.24s (含各 client 引擎初始化)
+[client] buf=cpu dir=push size=16 MB descs=1 | avg=   1287 MB/s (  12.4 ms) | median=   1287 | min=   1287 | max=   1287 | n=1
+[client] buf=cpu dir=push size=16 MB descs=1 | avg=   1375 MB/s (  11.6 ms) | median=   1375 | min=   1375 | max=   1375 | n=1
+[client] buf=cpu dir=push size=16 MB descs=1 | avg=   1351 MB/s (  11.8 ms) | median=   1351 | min=   1351 | max=   1351 | n=1
+[client] buf=cpu dir=push size=16 MB descs=1 | avg=   1390 MB/s (  11.5 ms) | median=   1390 | min=   1390 | max=   1390 | n=1
+[client] buf=cpu dir=push size=16 MB descs=1 | avg=   1272 MB/s (  12.6 ms) | median=   1272 | min=   1272 | max=   1272 | n=1
+[client] buf=cpu dir=push size=16 MB descs=1 | avg=   1416 MB/s (  11.3 ms) | median=   1416 | min=   1416 | max=   1416 | n=1
+[client] buf=cpu dir=push size=16 MB descs=1 | avg=   1238 MB/s (  12.9 ms) | median=   1238 | min=   1238 | max=   1238 | n=1
+[client] buf=cpu dir=push size=16 MB descs=1 | avg=   1430 MB/s (  11.2 ms) | median=   1430 | min=   1430 | max=   1430 | n=1
