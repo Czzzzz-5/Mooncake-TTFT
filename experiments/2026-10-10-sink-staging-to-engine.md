@@ -211,3 +211,91 @@ M2 的价值主张要改写：要么把 lanes/chunk/io 线程调优并进 M2 验
 - 轮询上限 300s 后 batch 泄漏（binding 无 free API，error 日志已注明）；
 - `dissect_gather.py` 假设事件不交错，M1 并发下会 KeyError——
   分析时用 FIFO 聚合口径（§8.4），脚本待适配多槽并发。
+
+---
+
+## 9. M2a 实施记录（10-11 完成）：引擎侧 gather 落地，端到端真收益
+
+### 9.1 实现
+
+**Mooncake 侧**（fork，engine.so 重编）：
+- `gpu_staging_pool.h` 加 `gatherDeviceToHost(slot, srcs, sizes)`：同槽
+  stream 上逐段 cudaMemcpyAsync（~4500 段/请求）+ event 同步；
+  排序保证用 cudaDeviceSynchronize（调用点在 prefill forward 结束后，
+  代价 ~µs）。
+- `transfer_engine_py` 加 `submit_gather_write(hostname, gpu_segments,
+  lengths, remote_base) → batch_id`：领池槽 → gather → 单描述符
+  async WRITE → 返回 batch_id；0=失败（调用方回退逐描述符）。
+  加 `release_gather_slot(batch_id)`：**槽由调用方在看到终态后归还**。
+
+**vLLM connector 侧**：`_engine_submit_gather = hasattr(engine,
+"submit_gather_write")` 能力探测自动选路（旧 .so 自动回落 M1）；
+`_build_gather_table` 纯 CPU 展开段表+manifest（地址 =
+region.base_addr + src_region_offset + block_id×block_len）；
+submit 走 executor（内部 gather 阻塞 ~10ms），轮询逻辑与 M1 共用
+`_poll_gather_batch`；看到终态后 `release_gather_slot`（超时放弃
+不还槽——session 可能还在读，槽随 batch 一起泄漏，已 log）。
+
+### 9.2 两个实施期 bug（都已修，均有教育意义）
+
+1. **monitor 线程 use-after-free → asio timer 堆损坏 segfault**：
+   最初用引擎侧 detach 线程轮询 batch 状态来还槽。`transferCheckStatus`
+   在 COMPLETED 时会 freeBatchID（BatchDesc 直接析构），monitor 线程
+   并发读已释放内存 → 野写碰到 asio 定时器堆 →
+   timer_queue::get_ready_timers 段错误。**教训：BatchDesc 的
+   生命周期是"谁调 check 谁 free"，任何第二读者都是 UB。**
+2. **容量检查缺失 → 424MB 合并批回退 13k 描述符老路**：`_gather_eligible`
+   只看 vLLM 槽（512MB），引擎池槽只有 192MB，3 请求合并批
+   （444MB）被 acquire 拒绝 → 回退逐描述符 → 引擎在万级描述符 +
+   多 io 线程下崩溃（同一 segfault 签名）。修复：引擎槽提到 512MB +
+   connector 容量 cap 取 min(vLLM槽, 对端槽, 引擎槽)。老路在极端
+   描述符数下的鲁棒性是遗留问题（记 §10）。
+
+### 9.3 环境
+
+2P1D 同轮 A/B（同一天同一栈，唯一变量 = engine.so 版本）：
+B=新 .so（M2 引擎侧 gather），A=旧 .so（M1 vLLM 侧 gather）。
+GATHER_SLOTS=16×512MB（vLLM 侧），引擎池 16×512MB，LANES=16，
+SLICE=1MB，IO_THREADS=16。seed 567/123/888，32 请求/并发 16/16k 字符。
+
+### 9.4 结果（客户端 TTFT，ms）
+
+| 组 | seed | mean | p50 | p90 | p99 | min | max |
+|----|------|------|-----|-----|-----|-----|-----|
+| A M1 | 567 | 1710.2 | 1700.9 | 1760.1 | 1834.2 | 1612.5 | 1835.3 |
+| A M1 | 123 | 1762.7 | 1739.9 | 1829.8 | 1837.1 | 1577.5 | 1837.3 |
+| A M1 | 888 | 1747.6 | 1747.3 | 1793.3 | 1808.2 | 1594.0 | 1809.4 |
+| B M2 | 567 | 1362.8 | 1519.6 | 1642.7 | 1650.4 | 369.8 | 1651.0 |
+| B M2 | 123 | 1391.4 | 1584.0 | 1621.7 | 1649.5 | 407.7 | 1654.8 |
+| B M2 | 888 | 1402.6 | 1604.9 | 1648.9 | 1669.5 | 371.1 | 1670.4 |
+
+p50 均值 A=1729.4 / B=1569.5（**B 快 159.9ms，-9.2%**）；
+mean A=1740.2 / B=1385.6（**-20.4%**）；max A≈1827 / B≈1659；
+B 组 min 恢复 ~370ms（队头请求接近无排队）。对 T8 基线
+（p50=1567）也已追平且尾部更好。
+
+### 9.5 相位归因
+
+| 相位 | A M1 | B M2 |
+|------|------|------|
+| gather→wire 提交 | p50 1.4-2.3ms | p50 34.9-39.5ms（含引擎内 gather） |
+| wire（单 148MB） | p50 110-111ms | p50 80.4-80.5ms |
+
+引擎 gather（~35ms，4500 段 launch-bound）把各请求的 wire 错峰，
+并发在飞传输变少 → 单流 wire 反而更快（80 vs 110ms）——M1 那种
+"齐射抢带宽"消失。净效果端到端 -9%~-20%。
+
+### 9.6 生效证据 checklist
+
+- [x] P_SEND_EXEC==P_SEND_DONE==92（两 P 合计，3 seed），零泄漏告警
+- [x] 降级零条（all slots busy / exceeds slot / falling back 均无）
+- [x] 96 压测请求 fail=0，冒烟输出连贯（T1 式抽检）
+- [x] A 组 "engine-side gather" 日志零条（确认走 M1 路径，对照成立）
+- [x] 原始档入 results/raw/M2/（8 份日志 gz）；崩掉的 M2/M2b 两轮
+      日志未归档（提取关键证据后删除，堆栈与告警原文见 §9.2）
+
+### 9.7 结论
+
+下沉方向验证成功：**gather 所有权移进引擎后，M1 的"p50 倒挂"被
+消除**（M2 全面优于 M1 和旧代码）。下一步 M2b：单请求内切片流水
+（拷满一片发一片，T8 §6 预期的 N=16 单流回退也在此一并处理）。

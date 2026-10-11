@@ -7,8 +7,10 @@ export MC_TCP_MAX_QUEUED_TRANSFERS_PER_PEER=65535
 export MC_TCP_MAX_PENDING_ADMISSIONS_PER_PEER=65535
 # GpuStagingPool 槽位：vLLM 将整请求 28 层合并为单次 ~115MB 传输，槽必须 ≥128MB
 # （2026-09-15 教训：默认 16MB 导致 acquire 静默回退 legacy，优化全程未生效，见 ttft_report_serving_mooncake_bf16_gpustaging.md）
-export MC_TCP_GPU_STAGING_SLOT_MB=192
-export MC_TCP_GPU_STAGING_SLOTS=4
+export MC_TCP_GPU_STAGING_SLOT_MB=${MC_TCP_GPU_STAGING_SLOT_MB:-512}
+# M2 起引擎侧 gather 用这个池：16 并发 pull 需要 16 槽（不足时 submit_gather_write
+# 返回 0，connector 回退逐描述符老路慢 100 倍）
+export MC_TCP_GPU_STAGING_SLOTS=${MC_TCP_GPU_STAGING_SLOTS:-16}
 # T8 诊断（2026-10-09，transfer 引擎并发模型调查）：默认 4 lanes/peer 把并发
 # clamp 在 4，且 64KB chunk 无流水；16 并发聚合带宽实测仅 ~720MB/s。
 # 提到 16 lanes + 1MB chunk 让并发传输真并行（代码证据：
