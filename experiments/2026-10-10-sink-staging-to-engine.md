@@ -299,3 +299,28 @@ B 组 min 恢复 ~370ms（队头请求接近无排队）。对 T8 基线
 下沉方向验证成功：**gather 所有权移进引擎后，M1 的"p50 倒挂"被
 消除**（M2 全面优于 M1 和旧代码）。下一步 M2b：单请求内切片流水
 （拷满一片发一片，T8 §6 预期的 N=16 单流回退也在此一并处理）。
+
+---
+
+## 10. 收敛盘点（10-13）：成果归属与最终形态
+
+**已在 Mooncake fork（gpu-staging-v1，全部 push）**：staging 池
+（c8f9f9d4）、多 io 线程修复（12a6f397）、引擎侧 gather
+submit_gather_write + release_gather_slot（bbd3f18f）。
+
+**vLLM 侧最终只剩协议薄层**（本地 commit，fork 远端缺失）：
+段表/manifest 构建（block 布局知识，必须留 vLLM）、D 侧接收槽 +
+scatter（M3 范畴，未做）、M1 路径（旧 .so 兼容 fallback，不占运行时
+资源）、XDBG 打点（实验工具）。
+
+10-13 收敛改动：P 侧检测到引擎 gather 后**不再分配 16×512MiB vLLM
+锁页槽**（省 8GB 死内存），commit c387b940e4；验证：2P1D 冒烟，
+P 日志 "producer gather slots not allocated"，D 侧槽不变，单描述符
+发送/scatter 正常，输出连贯。
+
+**遗留问题**（不在本轮范围）：
+1. 逐描述符老路在万级描述符 + 多 io 线程下会崩（§9.2 崩溃 2 的
+   深层原因未修，正常负载已不会触发）；
+2. 逐请求切片流水（M2b）与 D 侧下沉（M3）暂停——按 wuzichun
+   10-13 决定：不再加新优化，只做成果落实；
+3. vllm-repo 无 GitHub 远端，experiment commit 仅存本地。
