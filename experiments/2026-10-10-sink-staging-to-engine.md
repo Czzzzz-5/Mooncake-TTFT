@@ -310,8 +310,8 @@ submit_gather_write + release_gather_slot（bbd3f18f）。
 
 **vLLM 侧最终只剩协议薄层**（本地 commit，fork 远端缺失）：
 段表/manifest 构建（block 布局知识，必须留 vLLM）、D 侧接收槽 +
-scatter（M3 范畴，未做）、M1 路径（旧 .so 兼容 fallback，不占运行时
-资源）、XDBG 打点（实验工具）。
+scatter（M3 范畴，未做）、XDBG 打点（实验工具）。M1 路径已于
+§11 删除。
 
 10-13 收敛改动：P 侧检测到引擎 gather 后**不再分配 16×512MiB vLLM
 锁页槽**（省 8GB 死内存），commit c387b940e4；验证：2P1D 冒烟，
@@ -324,3 +324,28 @@ P 日志 "producer gather slots not allocated"，D 侧槽不变，单描述符
 2. 逐请求切片流水（M2b）与 D 侧下沉（M3）暂停——按 wuzichun
    10-13 决定：不再加新优化，只做成果落实；
 3. vllm-repo 无 GitHub 远端，experiment commit 仅存本地。
+
+---
+
+## 11. M1 路径删除（10-13）：vLLM 侧多槽设计彻底退役
+
+按 wuzichun 要求"用不上的槽设计删掉"，vLLM connector 中的 M1
+vLLM 侧 gather 路径整体移除（vllm-repo 本地 commit 2fc750c6d2）：
+
+- 删 `_gather_to_slot`、`_engine_gather_and_send_async`、模块级
+  `_gather_blocks_to_buffer`（仅 M1 使用）；`_gather_and_send_blocks_async`
+  现在直接就是 M2 引擎路径（建段表 → executor 调 submit_gather_write
+  → 轮询 → 还引擎槽）。
+- `_register_gather_buffer` 改为 consumer-only：producer 直接 return
+  （§10 的"不分配"从运行期跳过升级为代码层面不存在 producer 分支）；
+  D 侧 16×512MiB 接收槽 + scatter 保留（M3 未做，删了就没法收数据）。
+- 兼容策略变化：旧 engine.so（无 submit_gather_write）不再走 M1，
+  而是经 `_engine_submit_gather=False` 直接回退逐描述符老路（慢但
+  正确，且正常负载不会触发）。
+
+**冒烟验证（C3 轮，2P1D，GATHER=1）**：两个 P 实例日志 0 条
+"Mooncake gather buffers"分配（D 侧 1 条 16×512MiB，符合预期）；
+三实例均打印 "engine-side gather available (M2 path)"；~10k 字符
+prompt 请求链路 P_GATHER_DONE(10584 segs, 346MB) →
+P_SEND_EXEC descs=1 → P_SEND_DONE ret=0 → D_SCATTER_DONE，
+输出中文连贯。
