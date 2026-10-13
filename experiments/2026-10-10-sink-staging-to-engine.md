@@ -349,3 +349,47 @@ vLLM 侧 gather 路径整体移除（vllm-repo 本地 commit 2fc750c6d2）：
 prompt 请求链路 P_GATHER_DONE(10584 segs, 346MB) →
 P_SEND_EXEC descs=1 → P_SEND_DONE ret=0 → D_SCATTER_DONE，
 输出中文连贯。
+
+---
+
+## 12. M3：D 侧对称下沉（10-13）
+
+P 侧下沉（§9）的对称面：接收槽与 host→device scatter 也移进引擎。
+改动三处，全部沿用"hasattr 探测、旧 .so 自动回退老路"的策略：
+
+- **Mooncake fork `gpu-staging-v1` commit `91141140`**（已 push）：
+  - `GpuStagingPool::scatterHostToDevice`：`gatherDeviceToHost` 的镜像，
+    槽内字节从 offset 0 连续读出、逐段 H2D 到 GPU 段表；
+    **CUDA ≥12.8 时用 `cudaMemcpyBatchAsync` 一次提交整批**（见下）；
+  - pybind 三接口：`acquire_scatter_slot()` 领槽（首次领用时把槽注册为
+    local memory，供对端 WRITE 寻址；返回 (addr, 容量)，无空闲返回 0）、
+    `submit_scatter_to_device(slot_addr, dst_ptrs, lens)`（阻塞至字节落
+    显存）、`release_scatter_slot(slot_addr)`。
+- **vllm-repo 本地 commit `5f43ff94a4`**：consumer 每次 pull 领引擎槽
+  并广告其地址；`_engine_scatter_gathered_slot` 按 manifest 的
+  `buf_offset` 排序还原 P 侧打包顺序、构建目的段表（校验逻辑与旧
+  torch 路径一致）；由于槽布局整批连续，任何校验失败整批标记失败，
+  不做部分 scatter。**D 侧 16×512MiB vLLM 锁页槽不再分配**；旧
+  torch scatter 路径保留为旧引擎 fallback。
+
+**批量拷贝修复（scatter 性能）**：每块 payload 是块内定距切片
+（kv_block_len < block_len），无法合并成大拷贝；逐段 cudaMemcpyAsync
+是 launch 延迟瓶颈（C4 轮实测 346MB/10584 段 36-44ms）。改用
+`cudaMemcpyBatchAsync`（单次调用提交整批，C5 轮 232MB 稳态 17ms ≈
+13.9GB/s，已到 PCIe 带宽 bound）；老 toolkit 或调用报错自动回退逐段
+循环（重拷贝幂等，安全）。
+
+**冒烟（C5 轮，2P1D，GATHER=1）**：三个实例 0 条
+"Mooncake gather buffers" 分配（两侧槽全部引擎化）；D_SEND_PULL 广告
+`slot=engine:0x...`；链路 P_GATHER_DONE → P_SEND_EXEC descs=1 →
+ret=0 → D_SCATTER_DONE(232MB, 28segs)；3 连请求输出连贯。
+
+**观察（非本轮问题，未动）**：每轮前 1-2 个请求
+P_GATHER_DONE→P_SEND_EXEC 有 ~2.8s 暖池（C3/C4/C5 各轮一致，
+M2 之前即存在）；P 侧 gatherDeviceToHost 同样是万级逐段拷贝，
+可复用批量 API——属于后续可选优化，按"不加新优化"未动。
+
+**最终形态盘点（10-13）**：vLLM connector 只剩协议薄层——
+段表/manifest 构建（P 侧 src、D 侧 dst，block 布局知识）、
+XDBG 打点；两侧 staging 槽、gather/scatter 拷贝、异步传输全部在
+Mooncake fork。vLLM 锁页内存占用：P 侧 0、D 侧 0（此前各 8GB）。
