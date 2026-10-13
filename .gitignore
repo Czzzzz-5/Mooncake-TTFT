@@ -1,2 +1,11 @@
 __pycache__/
 *.pyc
+
+# 模型权重不入库（YaRN 副本只提交 config）
+models/**/*.safetensors
+models/**/merges.txt
+models/**/tokenizer*
+models/**/vocab*
+models/**/LICENSE
+models/**/README.md
+models/**/generation_config.json

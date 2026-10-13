@@ -393,3 +393,86 @@ M2 之前即存在）；P 侧 gatherDeviceToHost 同样是万级逐段拷贝，
 段表/manifest 构建（P 侧 src、D 侧 dst，block 布局知识）、
 XDBG 打点；两侧 staging 槽、gather/scatter 拷贝、异步传输全部在
 Mooncake fork。vLLM 锁页内存占用：P 侧 0、D 侧 0（此前各 8GB）。
+
+---
+
+## 13. 100k 长 prompt（T6 方案 A：大槽配置，10-13）
+
+首个 100k token 实验。**配置**：YaRN 扩展模型副本
+`models/Qwen2.5-7B-Instruct-yarn128k`（软链接权重 + config 加
+`rope_parameters: {rope_type: yarn, factor: 4.0,
+original_max_position_embeddings: 32768}`，vLLM 派生
+max_seq_len=131072）；引擎槽 `MC_TCP_GPU_STAGING_SLOT_MB=6144`、
+`SLOTS=4`（每进程 24GB 锁页）；prompt 由 `scripts/gen_prompt_tokens.py`
+用 Qwen tokenizer 精确校准到 100,000 token（usage 计 100,036 含指令）。
+
+**顺带修的两个引擎问题**（未提交，见文末）：
+1. `MC_TCP_GPU_STAGING_SLOT_MB` 的 env 解析上限写死 1024MB，设 6144 被
+   静默回落 16MB → 首批 100k 请求全程走了老路（C6 轮）。上限提到
+   16384（gpu_staging_pool.h 一行）。
+2. `gatherDeviceToHost` 同步上 `cudaMemcpyBatchAsync`：100k 的 17.5 万段
+   D2H gather 逐段发射要 **11.1s**（launch 延迟 bound，~63µs/段），
+   批量后 **0.24s**（23.5GB/s，带宽 bound）。submitGatherWrite 加了
+   gather/submit 分段计时的 LOG(INFO)。
+
+**结果（同轮 A/B，2P1D，各实例预热 2 发）**：
+
+| 组 | 样本 | 总耗时 | prefill | gather+submit | 网络 | scatter |
+|---|---|---|---|---|---|---|
+| 新路 M2/M3 | 4/4 成功 | 21.1-21.7s | 16.4-16.7s | 0.25-0.29s | 2.4-2.9s | 0.31-0.37s |
+| 老路 GATHER=0 | 1/3 成功 | 18.9s（成功那发） | ~16.5s | — | 0.81s | — |
+
+**老路在 100k 下不可靠（正确性级别）**：老路逐描述符合并依赖 block
+连续性——走运时 6250 块合并成 84 个描述符（成功，0.81s 传完）；
+allocator 碎片化时退化成 **17.5 万个描述符，超过传输引擎
+65535/peer 排队上限，submitTransfer 直接 ret=-1，D 侧永久
+WAITING_FOR_REMOTE_KVS 挂死**（req2/req3 均 600s 超时）。
+即 9-05 就记录过的描述符上限问题在 100k 规模必然触发。
+新路对 block 布局完全免疫（段表天然支持任意散乱），4/4 成功。
+
+**剩余差距**：新路网络段 2.4-2.9s vs 老路走运时 0.81s——单个 5.7GB
+描述符只占一条 TCP lane，老路 28 层分描述符能吃满 16 lanes。
+这就是 M2b（槽内切片流水/多描述符并行）要解决的，按计划未动。
+
+**另注**：`cudaMemcpyBatchAsync` 每进程首次调用有 ~9s 一次性暖池
+（驱动加载批量拷贝模块），生产部署应在引擎 init 时打一发 dummy
+gather/scatter 预热（未做）。
+
+**待提交（等 wuzichun 确认）**：Mooncake fork（槽上限 + gather 批量 +
+计时日志）、pd-kv-transfer（serve 脚本 MODEL/SERVED_NAME 参数化 +
+gen_prompt_tokens.py + prompts/ + 本卡）。vllm-repo 本轮无改动
+（M3 之后 connector 未动）。
+
+---
+
+## 14. M2b：单描述符拆条吃满多 lane（10-13）
+
+**问题**：M2/M3 把整个请求合成 1 条描述符，而 TCP 传输引擎的 lane
+并行单位是描述符——5.7GB 落在一条 lane 上 ~2.3GB/s，其余 15 条
+lane 闲置（C9 轮网络段 2.4-2.9s）。
+
+**改动**：`submit_gather_write` 加 `split` 参数（默认 1 行为不变），
+gather 完成后把槽内连续字节拆成 K 条等长带偏移的描述符，同一 batch
+提交，传输引擎自动撒到多条 lane；D 侧落到同一槽的不同偏移，协议零
+改动。connector 侧 K = clamp(总量/64MB, 1, 16)
+（`VLLM_MOONCAKE_GATHER_SPLIT` / `_SPLIT_MIN_MB` 可调）。
+
+**踩到的坑（已修）**：拆 K 条后 `allocateBatchID` 必须传 K——batch
+按任务数判完成，传 1 会在第一条 descriptor 完成时就报完成，connector
+提前释放槽 → gather 静默失败回退逐描述符 → 17.5 万描述符超队列上限
+→ 挂死 + 引擎崩溃（C10 首轮实测复现了这个链路的每一环）。
+
+**结果（C10b 轮，同配置 3 发）**：
+
+| 指标 | M2/M3 单描述符（C9） | M2b 拆 16 条（C10b） |
+|---|---|---|
+| 100k 总耗时 | 21.1 / 21.7 / 21.2s | **18.4 / 19.5 / 18.9s** |
+| 网络段 | 2.4-2.9s（~2.2GB/s） | **0.31-0.41s（~15GB/s）** |
+| gather+submit | 0.25-0.29s | 0.25-0.31s |
+| scatter | 0.31-0.37s | 0.31-0.41s |
+
+网络段快 7 倍，总耗时省 ~2.4s（剩下的 16.5s 全是 prefill 计算本身）。
+4.5k 回归：0.94-0.99s 无回退（346MB 自动拆 5 条，行为符合预期）。
+至此 100k 全链路：prefill 16.5s + 传输 0.9s，传输占比 5%。
+
+**待提交（等 wuzichun 确认）**：本节 + M2b 代码改动并入§13 待提交清单。

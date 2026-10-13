@@ -1,0 +1,2402 @@
+diff --git a/examples/disaggregated/example_connector/decode_example.py b/examples/disaggregated/example_connector/decode_example.py
+index 2d575840e6..7c5b20dabe 100644
+--- a/examples/disaggregated/example_connector/decode_example.py
++++ b/examples/disaggregated/example_connector/decode_example.py
+@@ -24,7 +24,7 @@ def main():
+     sampling_params = SamplingParams(temperature=0, top_p=0.95, max_tokens=10)
+ 
+     llm = LLM(
+-        model="meta-llama/Llama-3.2-1B-Instruct",
++        model="facebook/opt-125m",
+         enforce_eager=True,
+         gpu_memory_utilization=0.8,
+         max_num_batched_tokens=64,
+diff --git a/examples/disaggregated/example_connector/output.txt b/examples/disaggregated/example_connector/output.txt
+new file mode 100644
+index 0000000000..5ecf71e22d
+--- /dev/null
++++ b/examples/disaggregated/example_connector/output.txt
+@@ -0,0 +1,4 @@
++Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hello, my name is John
++Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi Hi The capital of France is $
++Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Your name is a
++Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey Hey The capital of China is called
+diff --git a/examples/disaggregated/example_connector/prefill_example.py b/examples/disaggregated/example_connector/prefill_example.py
+index 207c6daebc..8773b405f9 100644
+--- a/examples/disaggregated/example_connector/prefill_example.py
++++ b/examples/disaggregated/example_connector/prefill_example.py
+@@ -22,7 +22,7 @@ def main():
+     sampling_params = SamplingParams(temperature=0, top_p=0.95, max_tokens=1)
+ 
+     llm = LLM(
+-        model="meta-llama/Llama-3.2-1B-Instruct",
++        model="facebook/opt-125m",
+         enforce_eager=True,
+         gpu_memory_utilization=0.8,
+         kv_transfer_config=KVTransferConfig(
+diff --git a/examples/disaggregated/example_connector/run.sh b/examples/disaggregated/example_connector/run.sh
+index c1dcc95a2b..8b44253f8c 100644
+--- a/examples/disaggregated/example_connector/run.sh
++++ b/examples/disaggregated/example_connector/run.sh
+@@ -7,5 +7,5 @@ fi
+ # The directory of current script
+ SCRIPT_DIR=$(dirname "$(readlink -f "$0")")
+ 
+-VLLM_ENABLE_V1_MULTIPROCESSING=0 CUDA_VISIBLE_DEVICES=0 python3 "$SCRIPT_DIR/prefill_example.py"
+-VLLM_ENABLE_V1_MULTIPROCESSING=0 CUDA_VISIBLE_DEVICES=0 python3 "$SCRIPT_DIR/decode_example.py"
++VLLM_ENABLE_V1_MULTIPROCESSING=0 CUDA_VISIBLE_DEVICES=1 /home/wuzichun/llm_serve_demo/vllm-repo/.venv/bin/python "$SCRIPT_DIR/prefill_example.py"
++VLLM_ENABLE_V1_MULTIPROCESSING=0 CUDA_VISIBLE_DEVICES=2 /home/wuzichun/llm_serve_demo/vllm-repo/.venv/bin/python "$SCRIPT_DIR/decode_example.py"
+diff --git a/vllm/distributed/kv_transfer/kv_connector/factory.py b/vllm/distributed/kv_transfer/kv_connector/factory.py
+index aad7999d08..520ef6e61b 100644
+--- a/vllm/distributed/kv_transfer/kv_connector/factory.py
++++ b/vllm/distributed/kv_transfer/kv_connector/factory.py
+@@ -240,3 +240,13 @@ KVConnectorFactory.register_connector(
+     "vllm.distributed.kv_transfer.kv_connector.v1.hf3fs.hf3fs_connector",
+     "HF3FSKVConnector",
+ )
++KVConnectorFactory.register_connector(
++    "MyPDConnector",
++    "vllm.distributed.kv_transfer.kv_connector.v1.my_pd_connector",
++    "MyPDConnector",
++)
++KVConnectorFactory.register_connector(
++    "MyPDTCPConnector",
++    "vllm.distributed.kv_transfer.kv_connector.v1.my_pd_tcp_connector",
++    "MyPDTCPConnector",
++)
+diff --git a/vllm/distributed/kv_transfer/kv_connector/v1/mooncake/mooncake_connector.py b/vllm/distributed/kv_transfer/kv_connector/v1/mooncake/mooncake_connector.py
+index dd94ffb2f9..28f3ca6aae 100644
+--- a/vllm/distributed/kv_transfer/kv_connector/v1/mooncake/mooncake_connector.py
++++ b/vllm/distributed/kv_transfer/kv_connector/v1/mooncake/mooncake_connector.py
+@@ -2,11 +2,12 @@
+ # SPDX-FileCopyrightText: Copyright contributors to the vLLM project
+ import asyncio
+ import logging
++import os
+ import threading
+ import time
+ from collections import defaultdict
+ from concurrent.futures import ThreadPoolExecutor
+-from dataclasses import dataclass
++from dataclasses import dataclass, field
+ from enum import IntEnum
+ from typing import TYPE_CHECKING, Any
+ 
+@@ -376,6 +377,34 @@ def _get_tensor_dense_flag(tensor: torch.Tensor) -> bool | None:
+     return None
+ 
+ 
++def _scatter_buffer_to_blocks(
++    buf: torch.Tensor,
++    buf_offset: int,
++    cache: torch.Tensor,
++    block_ids: list[int],
++    block_len: int,
++    payload_offset: int,
++    payload_len: int,
++) -> None:
++    """Unpack payloads from a flat (pinned) gather buffer back into the
++    given blocks of a KV cache tensor.
++
++    The buffer layout is the concatenation, in block_ids order, of each
++    block's payload: the payload_len bytes at cache byte offset
++    block_id * block_len + payload_offset. The producer packs bytes in
++    exactly this order (engine-side gather of the segment table)."""
++    assert cache.is_contiguous(), "Mooncake scatter requires contiguous KV caches"
++    num_blocks = len(block_ids)
++    blocks = cache.view(torch.uint8).view(-1, block_len)
++    ids = torch.tensor(block_ids, dtype=torch.int64, device=cache.device)
++    src = (
++        buf[buf_offset : buf_offset + num_blocks * payload_len]
++        .view(num_blocks, payload_len)
++        .to(cache.device, non_blocking=True)
++    )
++    blocks[:, payload_offset : payload_offset + payload_len].index_copy_(0, ids, src)
++
++
+ class MooncakeXferMetadata(
+     msgspec.Struct,
+     omit_defaults=True,  # type: ignore[call-arg]
+@@ -391,6 +420,38 @@ class MooncakeXferMetadata(
+     registered_layer_names: list[str] = msgspec.field(default_factory=list)
+     registered_layer_indices: list[int] = msgspec.field(default_factory=list)
+     registered_group_indices: list[int] = msgspec.field(default_factory=list)
++    # Base address and capacity of the consumer's pinned receive slot
++    # (VLLM_MOONCAKE_GATHER): an engine staging slot (M3) or a vLLM-owned
++    # gather buffer (legacy). 0 means the consumer has no slot and the
++    # producer must use per-descriptor transfers.
++    gather_buffer_addr: int = 0
++    gather_buffer_size: int = 0
++
++
++class MooncakeGatherSegment(
++    msgspec.Struct,
++    omit_defaults=True,  # type: ignore[call-arg]
++):
++    """One run of the gather buffer: the packed payloads of every block of
++    a single transfer region, in the request's paired block order."""
++
++    layer_name: str
++    layer_index: int
++    # Index among the consumer's regions sharing layer_name, matching the
++    # occurrence counting in _align_transfer_regions (K half before V half).
++    occurrence: int
++    byte_len: int
++
++
++class MooncakeGatherManifest(
++    msgspec.Struct,
++    omit_defaults=True,  # type: ignore[call-arg]
++):
++    """Per-request description of where its KV bytes landed in the gather
++    buffer, so the consumer can scatter them back into its GPU blocks."""
++
++    buf_offset: int
++    segments: list[MooncakeGatherSegment]
+ 
+ 
+ class MooncakeXferResponseStatus(IntEnum):
+@@ -410,6 +471,9 @@ class MooncakeXferResponse(
+     ok_reqs: list[ReqId] | None = None
+     err_reqs: list[ReqId] | None = None
+     err_msg: str | None = None
++    # Set only for requests whose KV was pushed through the gather buffer;
++    # the consumer must scatter these before marking the requests received.
++    gather_manifests: dict[ReqId, MooncakeGatherManifest] | None = None
+ 
+ 
+ @dataclass
+@@ -437,6 +501,22 @@ class SendBlockMeta:
+     sending: int = 0
+ 
+ 
++@dataclass
++class _GatherPlanSegment:
++    local_region: TransferRegion
++    occurrence: int
++    # Local block ids of this region in their paired (transfer) order.
++    local_block_ids: list[int]
++    src_region_offset: int
++    transfer_len: int
++
++
++@dataclass
++class _GatherPlan:
++    segments: dict[ReqId, list[_GatherPlanSegment]] = field(default_factory=dict)
++    total_bytes: int = 0
++
++
+ class MooncakeConnectorMetadata(KVConnectorMetadata):
+     def __init__(self):
+         # Use (engine_id, dp_rank) to group reqs with same dp.
+@@ -846,6 +926,17 @@ class MooncakeConnectorScheduler:
+         """
+ 
+         params = request.kv_transfer_params
++        if params and params.get("transfer_id"):
++            logger.info(
++                "[XDBG] P_REQ_FINISHED t=%d transfer=%s",
++                time.time_ns(),
++                params["transfer_id"],
++            )
++        # 同进程同时钟（perf_counter）打点：与 [TTFT] 事件合法配对，
++        # 用于测量 "首 token 生成 → 连接器被告知完成" 的引擎内部延迟
++        from vllm.ttft_logger import ttft_event
++
++        ttft_event(request.request_id, "connector_request_finished", role="scheduler")
+         logger.debug(
+             "MooncakeConnector request_finished, req_id=%s, request_status=%s, "
+             "kv_transfer_params=%s",
+@@ -913,6 +1004,38 @@ class MooncakeConnectorWorker:
+         current_platform.set_device(self.device_id)
+ 
+         self.engine = TransferEngine()
++        # Engine-side gather (M2): when the binding exposes
++        # submit_gather_write, the producer hands the GPU segment table to
++        # the engine instead of gathering into vLLM-owned pinned slots.
++        self._engine_submit_gather = hasattr(self.engine, "submit_gather_write")
++        if self._engine_submit_gather:
++            # Engine-side gather stages into the TcpTransport pool; its slot
++            # capacity (not the vLLM buffer size) bounds the batch.
++            self._engine_slot_bytes = (
++                int(os.environ.get("MC_TCP_GPU_STAGING_SLOT_MB", "16")) << 20
++            )
++            # M2b: split large writes into K lane-parallel descriptors —
++            # one descriptor is pinned to a single TCP lane (~2.3GB/s),
++            # K descriptors spread across lanes (~4.9GB/s aggregate at
++            # 100k tokens). Split only big batches: at most SPLIT parts,
++            # each at least SPLIT_MIN_MB, so the 4.5k-token path (115MB)
++            # stays single-descriptor and historical data stays comparable.
++            self._gather_split_max = max(
++                1, int(os.environ.get("VLLM_MOONCAKE_GATHER_SPLIT", "16"))
++            )
++            self._gather_split_bytes = max(
++                1,
++                int(os.environ.get("VLLM_MOONCAKE_GATHER_SPLIT_MIN_MB", "64"))
++                << 20,
++            )
++            logger.info("Mooncake engine-side gather available (M2 path).")
++        # Engine-side scatter (M3): when the binding exposes
++        # acquire_scatter_slot, the consumer receives into engine staging
++        # slots and the engine scatters host->device; vLLM allocates no
++        # pinned receive slots of its own.
++        self._engine_scatter = hasattr(self.engine, "acquire_scatter_slot")
++        if self._engine_scatter:
++            logger.info("Mooncake engine-side scatter available (M3 path).")
+         self.hostname = get_ip()
+ 
+         assert (kv_transfer_config := vllm_config.kv_transfer_config)
+@@ -972,6 +1095,24 @@ class MooncakeConnectorWorker:
+         self.device_kv_caches: dict[str, torch.Tensor] = {}
+         self.reqs_need_send: dict[TransferId, SendBlockMeta] = {}
+ 
++        # Pinned staging buffers for the single-descriptor gather path
++        # (VLLM_MOONCAKE_GATHER). Allocated and registered with the transfer
++        # engine in register_kv_caches(); the consumer advertises a free
++        # slot's base address per pull through MooncakeXferMetadata.
++        self._gather_buf_bytes = (
++            envs.VLLM_MOONCAKE_GATHER_BUF_MB * 1024 * 1024
++            if envs.VLLM_MOONCAKE_GATHER
++            else 0
++        )
++        self._gather_slot_count = (
++            envs.VLLM_MOONCAKE_GATHER_SLOTS if envs.VLLM_MOONCAKE_GATHER else 0
++        )
++        self._gather_buffers: list[torch.Tensor] = []
++        self._gather_free_slots: list[int] = []
++        self._gather_lock = threading.Lock()
++        self._gather_broken = False
++        self._gather_regions_by_key: dict[tuple[str, int], TransferRegion] = {}
++
+         # For kv_both, we will act both prefiller and decoder.
+         if not self.is_kv_consumer:
+             # Background threads for sending kvcaches to D.
+@@ -1194,6 +1335,11 @@ class MooncakeConnectorWorker:
+         self, identity: bytes, sock: zmq.asyncio.Socket, meta: MooncakeXferMetadata
+     ):
+         pending_reqs: dict[ReqId, SendBlockMeta] = {}
++        logger.info(
++            "[XDBG] P_RECV_PULL t=%d reqs=%s",
++            time.time_ns(),
++            sorted(meta.req_blocks),
++        )
+         remote_tp_ranks = self.transfer_topo.handshake_target_ranks(meta.remote_tp_size)
+         if meta.remote_tp_rank not in remote_tp_ranks:
+             # This D worker does not pair with the P worker.
+@@ -1265,6 +1411,9 @@ class MooncakeConnectorWorker:
+             d_req_id: ReqId, send_meta: SendBlockMeta
+         ) -> tuple[ReqId, SendBlockMeta]:
+             await send_meta.ready.wait()
++            logger.info(
++                "[XDBG] P_WAIT_WAKEUP t=%d req=%s", time.time_ns(), d_req_id
++            )
+             return d_req_id, send_meta
+ 
+         wait_tasks = [
+@@ -1317,6 +1466,15 @@ class MooncakeConnectorWorker:
+                         "Request %s expired before sending on P side.", d_req_id
+                     )
+ 
++            gather_plan: _GatherPlan | None = None
++            if (
++                not self._gather_broken
++                and self._engine_submit_gather
++                and meta.gather_buffer_addr
++                and self.tp_size == meta.remote_tp_size
++            ):
++                gather_plan = _GatherPlan()
++
+             (
+                 src_ptrs,
+                 dst_ptrs,
+@@ -1328,6 +1486,7 @@ class MooncakeConnectorWorker:
+                 meta,
+                 local_regions,
+                 remote_regions,
++                gather_plan=gather_plan,
+             )
+             err_req_set = set(err_reqs)
+             ok_ready_reqs = [
+@@ -1336,16 +1495,40 @@ class MooncakeConnectorWorker:
+                 if d_req_id not in err_req_set
+             ]
+ 
++            gather_manifests: dict[ReqId, MooncakeGatherManifest] | None = None
+             if src_ptrs:
+                 remote_session = f"{meta.remote_hostname}:{meta.remote_port}"
+-                ret_value = await self.sender_loop.run_in_executor(
+-                    self._sender_executor,
+-                    self._send_blocks,
+-                    remote_session,
+-                    src_ptrs,
+-                    dst_ptrs,
+-                    lengths,
+-                )
++                if gather_plan is not None and self._gather_eligible(
++                    meta, gather_plan
++                ):
++                    ret_value, gather_manifests = (
++                        await self._gather_and_send_blocks_async(
++                            remote_session,
++                            meta.gather_buffer_addr,
++                            gather_plan,
++                            [d_req_id for d_req_id, _ in ok_ready_reqs],
++                        )
++                    )
++                    if ret_value is None:
++                        # Gather itself failed; retry with the plain
++                        # per-descriptor path.
++                        ret_value = await self.sender_loop.run_in_executor(
++                            self._sender_executor,
++                            self._send_blocks,
++                            remote_session,
++                            src_ptrs,
++                            dst_ptrs,
++                            lengths,
++                        )
++                else:
++                    ret_value = await self.sender_loop.run_in_executor(
++                        self._sender_executor,
++                        self._send_blocks,
++                        remote_session,
++                        src_ptrs,
++                        dst_ptrs,
++                        lengths,
++                    )
+ 
+                 if ret_value != 0:
+                     transfer_err_msg = f"Mooncake transfer engine returned {ret_value}"
+@@ -1378,6 +1561,7 @@ class MooncakeConnectorWorker:
+                 ok_reqs=[d_req_id for d_req_id, _ in ok_ready_reqs] or None,
+                 err_reqs=err_reqs or None,
+                 err_msg=err_msg,
++                gather_manifests=gather_manifests,
+             )
+             await sock.send_multipart((identity, self._encoder.encode(response)))
+ 
+@@ -1427,6 +1611,7 @@ class MooncakeConnectorWorker:
+         agent_meta: MooncakeXferMetadata,
+         local_regions: list[TransferRegion],
+         remote_regions: list[TransferRegion],
++        gather_plan: "_GatherPlan | None" = None,
+     ) -> tuple[list[int], list[int], list[int], list[ReqId], str | None]:
+         src_ptrs = []
+         dst_ptrs = []
+@@ -1435,6 +1620,16 @@ class MooncakeConnectorWorker:
+         err_msg: str | None = None
+         remote_session = f"{agent_meta.remote_hostname}:{agent_meta.remote_port}"
+ 
++        if gather_plan is not None:
++            # Occurrence indices of the aligned local regions, counted per
++            # layer name exactly like _align_transfer_regions keys them, so
++            # the consumer can match segments against its own registration.
++            occurrence_counts: dict[str, int] = defaultdict(int)
++            region_occurrences: list[int] = []
++            for region in local_regions:
++                region_occurrences.append(occurrence_counts[region.layer_name])
++                occurrence_counts[region.layer_name] += 1
++
+         for d_req_id, send_meta in ready_reqs:
+             _, remote_block_ids_per_group = agent_meta.req_blocks[d_req_id]
+ 
+@@ -1520,7 +1715,9 @@ class MooncakeConnectorWorker:
+                 remote_block_ids_by_group
+             )
+ 
+-            for local_region, remote_region in zip(local_regions, remote_regions):
++            for region_index, (local_region, remote_region) in enumerate(
++                zip(local_regions, remote_regions)
++            ):
+                 assert local_region.group_index == remote_region.group_index, (
+                     "Aligned Mooncake transfer regions must belong to the same "
+                     "KV group."
+@@ -1563,6 +1760,27 @@ class MooncakeConnectorWorker:
+                 assert dst_region_offset + transfer_len <= remote_region.kv_block_len, (
+                     "Destination transfer region exceeds remote KV block size."
+                 )
++                if gather_plan is not None:
++                    # Gather is only offered to homogeneous-TP peers, so the
++                    # plan always covers whole KV blocks with zero offsets.
++                    assert src_region_offset == 0 and dst_region_offset == 0, (
++                        "Mooncake gather requires zero region offsets."
++                    )
++                    paired_block_ids = [
++                        block_id
++                        for group in group_local_block_ids
++                        for block_id in group
++                    ]
++                    gather_plan.segments.setdefault(d_req_id, []).append(
++                        _GatherPlanSegment(
++                            local_region=local_region,
++                            occurrence=region_occurrences[region_index],
++                            local_block_ids=paired_block_ids,
++                            src_region_offset=src_region_offset,
++                            transfer_len=transfer_len,
++                        )
++                    )
++                    gather_plan.total_bytes += transfer_len * len(paired_block_ids)
+                 # Collapse one contiguous block group into a single larger
+                 # transfer descriptor when the per-block copy is identical.
+                 can_coalesce = _can_coalesce_block_transfers(
+@@ -1627,9 +1845,20 @@ class MooncakeConnectorWorker:
+         lengths: list[int],
+     ) -> int:
+         start_time = time.perf_counter()
++        logger.info(
++            "[XDBG] P_SEND_EXEC t=%d descs=%d bytes=%d",
++            time.time_ns(),
++            len(src_ptrs),
++            sum(lengths),
++        )
+         ret_value = self.engine.batch_transfer_sync_write(
+             remote_session, src_ptrs, dst_ptrs, lengths
+         )
++        logger.info(
++            "[XDBG] P_SEND_DONE t=%d ret=%d",
++            time.time_ns(),
++            ret_value,
++        )
+         duration = time.perf_counter() - start_time
+         if ret_value == 0:
+             self.xfer_stats.record_transfer(
+@@ -1650,6 +1879,470 @@ class MooncakeConnectorWorker:
+             )
+         return ret_value
+ 
++    def _gather_eligible(
++        self,
++        agent_meta: MooncakeXferMetadata,
++        gather_plan: _GatherPlan,
++    ) -> bool:
++        """Whether this batch can use the single-descriptor gather path."""
++        if gather_plan.total_bytes == 0:
++            return False
++        capacity = min(self._gather_buf_bytes, agent_meta.gather_buffer_size)
++        if self._engine_submit_gather:
++            # The engine stages into its own pool; exceeding its slot
++            # capacity silently degrades to the per-descriptor path.
++            capacity = min(capacity, self._engine_slot_bytes)
++        if gather_plan.total_bytes > capacity:
++            logger.warning_once(
++                "Mooncake gather: batch of %d bytes exceeds the gather buffer "
++                "capacity %d bytes; falling back to per-descriptor transfer.",
++                gather_plan.total_bytes,
++                capacity,
++            )
++            return False
++        return True
++
++    async def _gather_and_send_blocks_async(
++        self,
++        remote_session: str,
++        remote_buffer_addr: int,
++        gather_plan: _GatherPlan,
++        req_order: list[ReqId],
++    ) -> tuple[int | None, dict[ReqId, MooncakeGatherManifest] | None]:
++        """Hand the GPU segment table to the engine, which gathers into
++        its own staging slot and pushes it as one async WRITE (M2).
++
++        Returns (None, None) when the engine cannot stage the batch; the
++        caller then falls back to the per-descriptor path. On any transfer
++        failure the manifests are dropped so the consumer never scatters
++        stale bytes.
++        """
++        start_time = time.perf_counter()
++        src_ptrs, lens, manifests, total_bytes = self._build_gather_table(
++            gather_plan, req_order
++        )
++        # P_GATHER_DONE marks "segment table built"; the copies happen
++        # inside submit_gather_write (blocking ~ms, hence the executor).
++        logger.info(
++            "[XDBG] P_GATHER_DONE t=%d bytes=%d segs=%d",
++            time.time_ns(),
++            total_bytes,
++            len(src_ptrs),
++        )
++        split = max(
++            1,
++            min(
++                self._gather_split_max,
++                total_bytes // self._gather_split_bytes,
++            ),
++        )
++        batch_id = await self.sender_loop.run_in_executor(
++            self._sender_executor,
++            self.engine.submit_gather_write,
++            remote_session,
++            src_ptrs,
++            lens,
++            remote_buffer_addr,
++            split,
++        )
++        if batch_id == 0:
++            # Engine could not stage (no free slot, oversize, or submit
++            # failure); fall back to the per-descriptor path.
++            return None, None
++        logger.info(
++            "[XDBG] P_SEND_EXEC t=%d descs=%d bytes=%d",
++            time.time_ns(),
++            split,
++            total_bytes,
++        )
++        ret = await self._poll_gather_batch(
++            batch_id, remote_session, total_bytes, start_time
++        )
++        # The engine keeps the staging slot checked out until we hand it
++        # back. Never release after a give-up timeout: the session may still
++        # be reading from the slot (the slot leaks, like the batch).
++        if ret != -2:
++            self.engine.release_gather_slot(batch_id)
++        return ret, (manifests if ret == 0 else None)
++
++    def _build_gather_table(
++        self,
++        gather_plan: _GatherPlan,
++        req_order: list[ReqId],
++    ) -> tuple[list[int], list[int], dict[ReqId, MooncakeGatherManifest], int]:
++        """Flatten the gather plan into (gpu_addrs, lengths) plus manifests.
++
++        Pure CPU: no copies. The engine packs the segments in list order,
++        which is exactly the layout the manifests describe.
++        """
++        src_ptrs: list[int] = []
++        lens: list[int] = []
++        offset = 0
++        manifests: dict[ReqId, MooncakeGatherManifest] = {}
++        for req_id in req_order:
++            segments = gather_plan.segments.get(req_id)
++            if not segments:
++                continue
++            manifest = MooncakeGatherManifest(buf_offset=offset, segments=[])
++            for seg in segments:
++                region = seg.local_region
++                for block_id in seg.local_block_ids:
++                    src_ptrs.append(
++                        region.base_addr
++                        + seg.src_region_offset
++                        + block_id * region.block_len
++                    )
++                    lens.append(seg.transfer_len)
++                seg_bytes = seg.transfer_len * len(seg.local_block_ids)
++                manifest.segments.append(
++                    MooncakeGatherSegment(
++                        layer_name=region.layer_name,
++                        layer_index=region.layer_index,
++                        occurrence=seg.occurrence,
++                        byte_len=seg_bytes,
++                    )
++                )
++                offset += seg_bytes
++            manifests[req_id] = manifest
++        return src_ptrs, lens, manifests, offset
++
++    async def _poll_gather_batch(
++        self,
++        batch_id: int,
++        remote_session: str,
++        total_bytes: int,
++        start_time: float,
++    ) -> int:
++        """Poll an async gather batch to completion. Returns 0 on success,
++        -1 on failure, -2 when the caller gives up polling after 300s
++        (the batch may still be in flight; the caller drops the manifests
++        and must not release engine-side resources tied to it)."""
++        deadline = time.monotonic() + 300
++        while True:
++            status = self.engine.transfer_check_status(batch_id)
++            if status == 1:
++                duration = time.perf_counter() - start_time
++                self.xfer_stats.record_transfer(
++                    duration_s=duration,
++                    total_bytes=total_bytes,
++                    num_descs=1,
++                )
++                logger.info(
++                    "[XDBG] P_SEND_DONE t=%d ret=%d",
++                    time.time_ns(),
++                    0,
++                )
++                return 0
++            if status == -1:
++                duration = time.perf_counter() - start_time
++                self.xfer_stats.record_failed_transfer()
++                logger.warning(
++                    "Mooncake async gather transfer to %s failed after "
++                    "%s (1 descriptor, %d bytes)",
++                    remote_session,
++                    duration,
++                    total_bytes,
++                )
++                return -1
++            if time.monotonic() > deadline:
++                # No free API for a stuck batch; it leaks, but the manifests
++                # are dropped so no stale KV is scattered.
++                logger.error(
++                    "Mooncake async gather transfer to %s stuck for 300s; "
++                    "dropping manifests (batch %d leaks).",
++                    remote_session,
++                    batch_id,
++                )
++                self.xfer_stats.record_failed_transfer()
++                return -2
++            await asyncio.sleep(0.001)
++
++    def _find_cache_for_addr(self, addr: int) -> torch.Tensor:
++        """Return the registered KV cache tensor whose storage holds addr."""
++        for cache_or_caches in self.device_kv_caches.values():
++            caches = (
++                cache_or_caches
++                if isinstance(cache_or_caches, (tuple, list))
++                else (cache_or_caches,)
++            )
++            for cache in caches:
++                storage = cache.untyped_storage()
++                storage_addr = storage.data_ptr()
++                if storage_addr <= addr < storage_addr + storage.nbytes():
++                    return cache
++        raise RuntimeError(
++            f"Address {addr} is not inside any registered KV cache storage."
++        )
++
++    def _remote_block_ids_for_scatter(
++        self, block_ids_per_group: list[list[int]]
++    ) -> list[list[int]]:
++        """Recompute the consumer-side block id lists the producer used,
++        mirroring the NULL-block filtering in _build_transfer_params."""
++        group_specs = self.kv_cache_config.kv_cache_groups
++        return [
++            (
++                [block_id for block_id in group if block_id != NULL_BLOCK_ID]
++                if isinstance(group_specs[i].kv_cache_spec, MambaSpec)
++                else list(group)
++            )
++            for i, group in enumerate(block_ids_per_group)
++        ]
++
++    def _scatter_gathered_buffer(
++        self,
++        manifests: dict[ReqId, MooncakeGatherManifest],
++        pull_metas: dict[ReqId, PullReqMeta],
++        slot_idx: int | None = None,
++    ) -> set[ReqId]:
++        """Scatter gather-buffer bytes back into local GPU KV blocks.
++
++        Runs before the affected requests are marked as received, preserving
++        the "applied at destination" semantics of the per-descriptor path.
++        Returns the set of requests whose scatter failed; those are not
++        marked finished.
++        """
++        if slot_idx is None or slot_idx >= len(self._gather_buffers):
++            logger.error(
++                "Received gather manifests but no valid gather slot "
++                "(slot_idx=%s); affected requests will not complete: %s",
++                slot_idx,
++                sorted(manifests),
++            )
++            return set(manifests)
++        failed: set[ReqId] = set()
++        current_platform.set_device(self.device_id)
++        with self._gather_lock:
++            buf = self._gather_buffers[slot_idx]
++            total_bytes = 0
++            num_segments = 0
++            for req_id, manifest in manifests.items():
++                pull_meta = pull_metas.get(req_id)
++                if pull_meta is None:
++                    logger.error("Gather manifest for unknown request %s", req_id)
++                    failed.add(req_id)
++                    continue
++                try:
++                    block_ids_by_group = self._logical_to_kernel_block_ids(
++                        self._remote_block_ids_for_scatter(pull_meta.local_block_ids)
++                    )
++                    offset = manifest.buf_offset
++                    for seg in manifest.segments:
++                        region = self._gather_regions_by_key.get(
++                            (seg.layer_name, seg.occurrence)
++                        )
++                        if region is None or region.layer_index != seg.layer_index:
++                            raise RuntimeError(
++                                f"Gather segment {seg.layer_name} occurrence "
++                                f"{seg.occurrence} does not match the local KV "
++                                "cache registration."
++                            )
++                        block_ids = block_ids_by_group[region.group_index]
++                        if len(block_ids) * region.kv_block_len != seg.byte_len:
++                            raise RuntimeError(
++                                f"Gather segment size mismatch for "
++                                f"{seg.layer_name}: manifest={seg.byte_len}, "
++                                f"local={len(block_ids) * region.kv_block_len}."
++                            )
++                        cache = self._find_cache_for_addr(region.base_addr)
++                        _scatter_buffer_to_blocks(
++                            buf,
++                            offset,
++                            cache,
++                            block_ids,
++                            region.block_len,
++                            region.base_addr - cache.data_ptr(),
++                            region.kv_block_len,
++                        )
++                        offset += seg.byte_len
++                        num_segments += 1
++                    total_bytes += offset - manifest.buf_offset
++                except Exception:
++                    logger.exception(
++                        "Failed to scatter gathered KV for request %s.", req_id
++                    )
++                    failed.add(req_id)
++            torch.cuda.synchronize()
++            logger.info(
++                "[XDBG] D_SCATTER_DONE t=%d bytes=%d segs=%d",
++                time.time_ns(),
++                total_bytes,
++                num_segments,
++            )
++        if failed:
++            self.xfer_stats.record_failed_recv()
++        return failed
++
++    def _engine_scatter_gathered_slot(
++        self,
++        manifests: dict[ReqId, MooncakeGatherManifest],
++        pull_metas: dict[ReqId, PullReqMeta],
++        slot_addr: int,
++    ) -> set[ReqId]:
++        """Scatter an engine receive slot into local GPU KV blocks (M3).
++
++        vLLM only builds the destination segment table; the engine does the
++        host->device copies from its own staging slot
++        (submit_scatter_to_device blocks until the bytes are applied).
++        Returns the set of requests not to mark as received. Because the
++        engine reads the slot contiguously from offset 0, any table
++        validation failure corrupts the layout of the whole batch — the
++        batch then fails as a unit instead of scattering partial data.
++        """
++        failed: set[ReqId] = set()
++        dst_ptrs: list[int] = []
++        lens: list[int] = []
++        total_bytes = 0
++        num_segments = 0
++        # The producer packed the slot in request order; sorting manifests
++        # by buf_offset reproduces that order regardless of dict ordering.
++        for req_id, manifest in sorted(
++            manifests.items(), key=lambda kv: kv[1].buf_offset
++        ):
++            pull_meta = pull_metas.get(req_id)
++            if pull_meta is None:
++                logger.error("Gather manifest for unknown request %s", req_id)
++                failed.add(req_id)
++                continue
++            try:
++                block_ids_by_group = self._logical_to_kernel_block_ids(
++                    self._remote_block_ids_for_scatter(pull_meta.local_block_ids)
++                )
++                if manifest.buf_offset != total_bytes:
++                    raise RuntimeError(
++                        f"Gather manifest for {req_id} starts at slot "
++                        f"offset {manifest.buf_offset}, expected "
++                        f"{total_bytes}."
++                    )
++                for seg in manifest.segments:
++                    region = self._gather_regions_by_key.get(
++                        (seg.layer_name, seg.occurrence)
++                    )
++                    if region is None or region.layer_index != seg.layer_index:
++                        raise RuntimeError(
++                            f"Gather segment {seg.layer_name} occurrence "
++                            f"{seg.occurrence} does not match the local KV "
++                            "cache registration."
++                        )
++                    block_ids = block_ids_by_group[region.group_index]
++                    if len(block_ids) * region.kv_block_len != seg.byte_len:
++                        raise RuntimeError(
++                            f"Gather segment size mismatch for "
++                            f"{seg.layer_name}: manifest={seg.byte_len}, "
++                            f"local={len(block_ids) * region.kv_block_len}."
++                        )
++                    for block_id in block_ids:
++                        dst_ptrs.append(
++                            region.base_addr + block_id * region.block_len
++                        )
++                        lens.append(region.kv_block_len)
++                    total_bytes += seg.byte_len
++                    num_segments += 1
++            except Exception:
++                logger.exception(
++                    "Failed to build the scatter table for request %s.", req_id
++                )
++                failed.add(req_id)
++        if failed:
++            logger.error(
++                "Scatter table build failed for %s; dropping the whole "
++                "batch in slot %#x (contiguous layout is batch-wide).",
++                sorted(failed),
++                slot_addr,
++            )
++            self.xfer_stats.record_failed_recv()
++            return set(manifests)
++        if dst_ptrs:
++            ret = self.engine.submit_scatter_to_device(slot_addr, dst_ptrs, lens)
++            if ret != 0:
++                logger.error(
++                    "Engine scatter_to_device failed (ret=%d) for slot %#x; "
++                    "affected requests will not complete: %s",
++                    ret,
++                    slot_addr,
++                    sorted(manifests),
++                )
++                self.xfer_stats.record_failed_recv()
++                return set(manifests)
++        logger.info(
++            "[XDBG] D_SCATTER_DONE t=%d bytes=%d segs=%d",
++            time.time_ns(),
++            total_bytes,
++            num_segments,
++        )
++        return failed
++
++    def _register_gather_buffer(self) -> None:
++        """Allocate the pinned gather buffers and register them with Mooncake.
++
++        Legacy receive path only, for engines without the M3 bindings: the
++        consumer needs one slot per in-flight pull — the network writes
++        directly into the consumer slot outside any lock, so concurrent
++        pulls sharing a single buffer would silently corrupt each other's
++        KV (observed as garbage output under 2P1D load). With engine-side
++        scatter (acquire_scatter_slot) the receive slots live in the
++        engine's staging pool and nothing is allocated here. The producer
++        allocates nothing either way: gather staging lives in the engine
++        (submit_gather_write).
++        """
++        if self._gather_buf_bytes <= 0:
++            return
++        if not self.is_kv_consumer:
++            return
++        if self._engine_scatter:
++            logger.info(
++                "Mooncake consumer receive slots live in the engine "
++                "staging pool (M3 path); no vLLM buffers allocated."
++            )
++            return
++        num_slots = self._gather_slot_count
++        try:
++            for _ in range(num_slots):
++                buf = torch.empty(
++                    self._gather_buf_bytes, dtype=torch.uint8, pin_memory=True
++                )
++                ret_value = self.engine.register_memory(
++                    buf.data_ptr(), buf.numel()
++                )
++                if ret_value != 0:
++                    raise RuntimeError(f"register_memory returned {ret_value}")
++                self._gather_buffers.append(buf)
++        except Exception as e:
++            logger.warning(
++                "Mooncake gather buffer setup failed (%s); "
++                "VLLM_MOONCAKE_GATHER is disabled.",
++                e,
++            )
++            self._gather_buf_bytes = 0
++            self._gather_buffers = []
++            self._gather_free_slots = []
++            return
++        self._gather_free_slots = list(range(len(self._gather_buffers)))
++        logger.info(
++            "Mooncake gather buffers: %d x %d MiB pinned, slot0 at %#x",
++            len(self._gather_buffers),
++            self._gather_buf_bytes >> 20,
++            self._gather_buffers[0].data_ptr(),
++        )
++
++    def _build_gather_region_lookup(self) -> None:
++        """Map (layer_name, occurrence) to the local transfer region, using
++        the same per-layer occurrence counting as _align_transfer_regions."""
++        regions = self._get_transfer_regions(
++            self.kv_caches_base_addr,
++            self.block_len_per_layer,
++            self.kv_block_len_per_layer,
++            self.registered_layer_names,
++            self.registered_layer_indices,
++            self.registered_group_indices,
++        )
++        occurrence_counts: dict[str, int] = defaultdict(int)
++        self._gather_regions_by_key = {}
++        for region in regions:
++            occurrence = occurrence_counts[region.layer_name]
++            occurrence_counts[region.layer_name] += 1
++            self._gather_regions_by_key[(region.layer_name, occurrence)] = region
++
+     def register_kv_caches(self, kv_caches: dict[str, torch.Tensor]):
+         """Register the KV Cache data in mooncake."""
+ 
+@@ -1733,6 +2426,9 @@ class MooncakeConnectorWorker:
+             self.kv_block_len_per_layer,
+         )
+ 
++        self._build_gather_region_lookup()
++        self._register_gather_buffer()
++
+         # No need to launch server for D node.
+         if self.is_kv_consumer:
+             return
+@@ -1822,6 +2518,24 @@ class MooncakeConnectorWorker:
+         pull_metas: dict[ReqId, PullReqMeta],
+     ):
+         req_ids = set(pull_metas)
++        # 每次 pull 领一个空闲接收槽：网络直接写槽（无锁），槽复用必须等
++        # 上一批 scatter 完。没空闲槽就广播 addr=0，P 自动回退逐描述符路径。
++        # M3：槽在引擎 staging 池里（acquire_scatter_slot 返回 (addr, 容量)，
++        # 返回 0 表示没有空闲槽）；旧引擎没有该 API 时回退 vLLM 自己的锁页槽。
++        slot_idx: int | None = None
++        engine_slot_addr = 0
++        gather_addr = 0
++        gather_size = 0
++        if self._engine_scatter:
++            engine_slot_addr, gather_size = self.engine.acquire_scatter_slot()
++            gather_addr = engine_slot_addr
++        elif self._gather_buffers:
++            with self._gather_lock:
++                if self._gather_free_slots:
++                    slot_idx = self._gather_free_slots.pop()
++            if slot_idx is not None:
++                gather_addr = self._gather_buffers[slot_idx].data_ptr()
++                gather_size = self._gather_buf_bytes
+         metadata = MooncakeXferMetadata(
+             remote_hostname=self.hostname,
+             remote_port=self.rpc_port,
+@@ -1837,6 +2551,8 @@ class MooncakeConnectorWorker:
+             registered_layer_names=self.registered_layer_names,
+             registered_layer_indices=self.registered_layer_indices,
+             registered_group_indices=self.registered_group_indices,
++            gather_buffer_addr=gather_addr,
++            gather_buffer_size=gather_size,
+         )
+ 
+         encoded_data = self._encoder.encode(metadata)
+@@ -1857,6 +2573,14 @@ class MooncakeConnectorWorker:
+                     zmq.RCVTIMEO, (envs.VLLM_MOONCAKE_ABORT_REQUEST_TIMEOUT + 60) * 1000
+                 )
+                 await sock.send(encoded_data)
++                logger.info(
++                    "[XDBG] D_SEND_PULL t=%d reqs=%s slot=%s",
++                    time.time_ns(),
++                    sorted(req_ids),
++                    f"engine:{engine_slot_addr:#x}"
++                    if engine_slot_addr
++                    else slot_idx,
++                )
+                 while True:
+                     ret_msg = await sock.recv()
+                     response = self._xfer_resp_decoder.decode(ret_msg)
+@@ -1868,7 +2592,9 @@ class MooncakeConnectorWorker:
+                         )
+                         self.xfer_stats.record_failed_recv()
+                         return
+-                    self.process_pulling_result(response, pull_metas)
++                    self.process_pulling_result(
++                        response, pull_metas, slot_idx, engine_slot_addr
++                    )
+                     if response.status == MooncakeXferResponseStatus.FINISH:
+                         break
+         except zmq.ContextTerminated:
+@@ -1877,15 +2603,45 @@ class MooncakeConnectorWorker:
+             logger.error("MooncakeXferMetadata transfer failed for %s: %s", req_ids, e)
+             self.xfer_stats.record_failed_recv()
+             return
++        finally:
++            if engine_slot_addr:
++                self.engine.release_scatter_slot(engine_slot_addr)
++            if slot_idx is not None:
++                with self._gather_lock:
++                    self._gather_free_slots.append(slot_idx)
+ 
+     def process_pulling_result(
+         self,
+         response: MooncakeXferResponse,
+         pull_metas: dict[ReqId, PullReqMeta],
++        slot_idx: int | None = None,
++        engine_slot_addr: int = 0,
+     ):
+         ok_reqs: list[ReqId] = response.ok_reqs or []
++        logger.info(
++            "[XDBG] D_RESP_RECV t=%d reqs=%s",
++            time.time_ns(),
++            sorted(ok_reqs),
++        )
++
++        failed_scatter: set[ReqId] = set()
++        if response.gather_manifests:
++            # The KV bytes of these requests are sitting in this pull's
++            # pinned receive slot; scatter them into the GPU blocks BEFORE
++            # marking the requests as received. M3: the slot and the
++            # host->device scatter both live in the engine.
++            if engine_slot_addr:
++                failed_scatter = self._engine_scatter_gathered_slot(
++                    response.gather_manifests, pull_metas, engine_slot_addr
++                )
++            else:
++                failed_scatter = self._scatter_gathered_buffer(
++                    response.gather_manifests, pull_metas, slot_idx
++                )
+ 
+         for req_id in ok_reqs:
++            if req_id in failed_scatter:
++                continue
+             pull_meta = pull_metas[req_id]
+             # No race because we are in async loop.
+             pull_meta.pull_tasks_count -= 1
+@@ -2008,6 +2764,9 @@ class MooncakeConnectorWorker:
+                     time.perf_counter() + envs.VLLM_MOONCAKE_ABORT_REQUEST_TIMEOUT
+                 )
+                 send_meta.ready.set()
++                logger.info(
++                    "[XDBG] P_READY t=%d transfer=%s", time.time_ns(), transfer_id
++                )
+             else:
+                 # From update_state_after_alloc(),
+                 # but not reach request_finished() yet
+@@ -2034,6 +2793,11 @@ class MooncakeConnectorWorker:
+         if not self.is_kv_consumer and (
+             metadata.reqs_to_send or metadata.reqs_not_processed
+         ):
++            logger.info(
++                "[XDBG] P_POST_RECORD t=%d reqs=%s",
++                time.time_ns(),
++                sorted(metadata.reqs_to_send),
++            )
+             asyncio.run_coroutine_threadsafe(
+                 self.record_send_reqs(metadata), self.sender_loop
+             )
+diff --git a/vllm/distributed/kv_transfer/kv_connector/v1/my_pd_connector.py b/vllm/distributed/kv_transfer/kv_connector/v1/my_pd_connector.py
+new file mode 100644
+index 0000000000..3a132a5b2d
+--- /dev/null
++++ b/vllm/distributed/kv_transfer/kv_connector/v1/my_pd_connector.py
+@@ -0,0 +1,465 @@
++# SPDX-License-Identifier: Apache-2.0
++# SPDX-FileCopyrightText: Copyright contributors to the vLLM project
++"""
++MyPDConnector: a minimal reference implementation of disaggregated
++prefill-decode (PD) separation using the vLLM v1 KV connector API.
++
++This connector intentionally uses shared local disk as the KV transport
++so that you can see the exact PD hand-off points without extra network
++or RDMA dependencies.
++
++- Producer (prefill) side: saves prompt KV caches to disk after prefill.
++- Consumer (decode) side: loads prompt KV caches from disk before decode.
++"""
++
++import os
++from dataclasses import dataclass, field
++from typing import TYPE_CHECKING, Any
++
++import safetensors
++import torch
++
++from vllm.config import VllmConfig
++from vllm.distributed.kv_transfer.kv_connector.v1.base import (
++    KVConnectorBase_V1,
++    KVConnectorMetadata,
++    KVConnectorRole,
++)
++from vllm.logger import init_logger
++from vllm.model_executor.layers.attention.mla_attention import MLACommonMetadata
++from vllm.utils.gpu_sync_debug import gpu_sync_allowed
++from vllm.utils.hashing import safe_hash
++from vllm.v1.attention.backend import AttentionMetadata
++from vllm.v1.core.sched.output import SchedulerOutput
++
++if TYPE_CHECKING:
++    from vllm.forward_context import ForwardContext
++    from vllm.v1.core.kv_cache_manager import KVCacheBlocks
++    from vllm.v1.kv_cache_interface import KVCacheConfig
++    from vllm.v1.request import Request
++
++from vllm.ttft_logger import ttft_event
++
++logger = init_logger(__name__)
++
++
++@dataclass
++class MyPDReqMeta:
++    """Per-request metadata carried to worker."""
++
++    req_id: str
++    token_ids: torch.Tensor
++    slot_mapping: torch.Tensor
++    is_store: bool
++    mm_hashes: list[str]
++
++    @staticmethod
++    def make_meta(
++        req_id: str,
++        token_ids: list[int],
++        block_ids: list[int],
++        block_size: int,
++        is_store: bool,
++        mm_hashes: list[str],
++    ) -> "MyPDReqMeta":
++        valid_num_tokens = align_to_block_size(len(token_ids), block_size)
++        token_ids_tensor = torch.tensor(token_ids)[:valid_num_tokens]
++        block_ids_tensor = torch.tensor(block_ids)
++        num_blocks = block_ids_tensor.shape[0]
++        block_offsets = torch.arange(0, block_size)
++        slot_mapping = (
++            block_offsets.reshape((1, block_size))
++            + block_ids_tensor.reshape((num_blocks, 1)) * block_size
++        )
++        slot_mapping = slot_mapping.flatten()[:valid_num_tokens]
++        return MyPDReqMeta(
++            req_id=req_id,
++            token_ids=token_ids_tensor,
++            slot_mapping=slot_mapping,
++            is_store=is_store,
++            mm_hashes=mm_hashes,
++        )
++
++
++@dataclass
++class MyPDConnectorMetadata(KVConnectorMetadata):
++    requests: list[MyPDReqMeta] = field(default_factory=list)
++
++    def add_request(
++        self,
++        req_id: str,
++        token_ids: list[int],
++        block_ids: list[int],
++        block_size: int,
++        is_store: bool,
++        mm_hashes: list[str],
++    ) -> None:
++        self.requests.append(
++            MyPDReqMeta.make_meta(
++                req_id, token_ids, block_ids, block_size, is_store, mm_hashes
++            )
++        )
++
++
++class MyPDConnector(KVConnectorBase_V1):
++    """
++    Minimal disk-based PD connector.
++
++    The key idea:
++    1. Scheduler looks at a new request and checks whether its prompt KV
++       already exists on disk (`get_num_new_matched_tokens`).
++    2. If not, it tells the prefill worker to STORE the KV after prefill.
++    3. The decode worker later sees the same prompt, finds the stored KV,
++       and tells the worker to LOAD it into the paged KV cache.
++    """
++
++    def __init__(
++        self,
++        vllm_config: "VllmConfig",
++        role: KVConnectorRole,
++        kv_cache_config: "KVCacheConfig",
++    ):
++        super().__init__(
++            vllm_config=vllm_config,
++            role=role,
++            kv_cache_config=kv_cache_config,
++        )
++        self._block_size = vllm_config.cache_config.block_size
++        self._requests_need_load: dict[str, Request] = {}
++        self._storage_path = self._kv_transfer_config.get_from_extra_config(
++            "shared_storage_path", "/tmp/my_pd_storage"
++        )
++        os.makedirs(self._storage_path, exist_ok=True)
++        logger.info(
++            "[MyPDConnector] role=%s storage_path=%s",
++            role.name,
++            self._storage_path,
++        )
++
++    # ==========================================================
++    # Worker-side: load KV from external storage into vLLM buffer
++    # ==========================================================
++    def start_load_kv(
++        self, forward_context: "ForwardContext", **kwargs: Any
++    ) -> None:
++        """Called before model forward on the decode (consumer) worker."""
++
++        def inject_kv_into_layer(
++            dst_kv_cache_layer: torch.Tensor,
++            src_kv_cache: torch.Tensor,
++            slot_mapping: torch.Tensor,
++            attn_metadata: AttentionMetadata,
++        ) -> None:
++            slot_mapping = slot_mapping.to(
++                dst_kv_cache_layer.device, non_blocking=True
++            )
++            if isinstance(attn_metadata, MLACommonMetadata):
++                num_pages, page_size = dst_kv_cache_layer.shape[:2]
++                dst_kv_cache_layer = dst_kv_cache_layer.reshape(
++                    num_pages * page_size, -1
++                )
++                dst_kv_cache_layer[slot_mapping, ...] = src_kv_cache
++            else:
++                block_idxs = slot_mapping // self._block_size
++                offsets = slot_mapping % self._block_size
++                dst_kv_cache_layer[block_idxs, :, offsets] = src_kv_cache
++
++        metadata = self._get_connector_metadata()
++        assert isinstance(metadata, MyPDConnectorMetadata)
++
++        attn_metadata = forward_context.attn_metadata
++        if attn_metadata is None:
++            logger.warning(
++                "[MyPDConnector] start_load_kv called but attn_metadata is None"
++            )
++            return
++
++        for request in metadata.requests:
++            if request.is_store:
++                continue
++            ttft_event(
++                request.req_id,
++                "kv_load_start",
++                role="decode",
++                extra={"tokens": len(request.slot_mapping)},
++            )
++            logger.info(
++                "[MyPDConnector] LOADING %d tokens from disk into paged KV cache",
++                len(request.slot_mapping),
++            )
++            for layer_name in forward_context.no_compile_layers:
++                layer = forward_context.no_compile_layers[layer_name]
++                kv_cache_layer = getattr(layer, "kv_cache", None)
++                if kv_cache_layer is None:
++                    continue
++
++                filename = self._make_layer_file(
++                    layer_name, request.token_ids, request.mm_hashes
++                )
++                if not os.path.exists(filename):
++                    logger.warning("[MyPDConnector] missing file: %s", filename)
++                    continue
++
++                kv_cache_cpu = safetensors.torch.load_file(filename)["kv_cache"]
++                kv_cache = kv_cache_cpu.to(
++                    kv_cache_layer.device, non_blocking=True
++                )
++                if isinstance(attn_metadata, dict):
++                    inject_kv_into_layer(
++                        kv_cache_layer,
++                        kv_cache,
++                        request.slot_mapping,
++                        attn_metadata[layer_name],
++                    )
++                    logger.info(
++                        "[MyPDConnector] injected layer %s for request",
++                        layer_name,
++                    )
++            ttft_event(
++                request.req_id,
++                "kv_load_end",
++                role="decode",
++                extra={"tokens": len(request.slot_mapping)},
++            )
++
++    def wait_for_layer_load(self, layer_name: str) -> None:
++        """Disk load is synchronous; nothing to wait for."""
++        return
++
++    # ==========================================================
++    # Worker-side: save KV from vLLM buffer to external storage
++    # ==========================================================
++    def save_kv_layer(
++        self,
++        layer_name: str,
++        kv_layer: torch.Tensor,
++        attn_metadata: AttentionMetadata,
++        **kwargs: Any,
++    ) -> None:
++        """Called inside model forward on the prefill (producer) worker."""
++
++        def extract_kv_from_layer(
++            layer: torch.Tensor, slot_mapping: torch.Tensor
++        ) -> torch.Tensor:
++            slot_mapping = slot_mapping.to(layer.device, non_blocking=True)
++            if isinstance(attn_metadata, MLACommonMetadata):
++                num_pages, page_size = layer.shape[:2]
++                return layer.reshape(num_pages * page_size, -1)[
++                    slot_mapping, ...
++                ]
++            block_idxs = slot_mapping // self._block_size
++            offsets = slot_mapping % self._block_size
++            return layer[block_idxs, :, offsets]
++
++        connector_metadata = self._get_connector_metadata()
++        assert isinstance(connector_metadata, MyPDConnectorMetadata)
++        for request in connector_metadata.requests:
++            if request.is_store:
++                ttft_event(
++                    request.req_id,
++                    "kv_save_start",
++                    role="prefill",
++                    extra={"layer": layer_name, "tokens": len(request.slot_mapping)},
++                )
++                filename = self._make_layer_file(
++                    layer_name, request.token_ids, request.mm_hashes
++                )
++                kv_cache = extract_kv_from_layer(kv_layer, request.slot_mapping)
++                with gpu_sync_allowed():
++                    tensors = {"kv_cache": kv_cache.detach().cpu()}
++                safetensors.torch.save_file(tensors, filename)
++                logger.info(
++                    "[MyPDConnector] SAVED layer %s (%d tokens) -> %s",
++                    layer_name,
++                    len(request.slot_mapping),
++                    filename,
++                )
++                ttft_event(
++                    request.req_id,
++                    "kv_save_end",
++                    role="prefill",
++                    extra={"layer": layer_name, "tokens": len(request.slot_mapping)},
++                )
++
++    def wait_for_save(self) -> None:
++        """Disk save is synchronous; nothing to wait for."""
++        return
++
++    # ==========================================================
++    # Scheduler-side: decide what KV can be reused
++    # ==========================================================
++    def get_num_new_matched_tokens(
++        self,
++        request: "Request",
++        num_computed_tokens: int,
++    ) -> tuple[int | None, bool]:
++        """
++        Return how many tokens of this request can be loaded from external
++        storage instead of being recomputed locally.
++        """
++        if not self._found_match_for_request(request):
++            return 0, False
++
++        logger.info(
++            "[MyPDConnector] CACHE HIT for request %s", request.request_id
++        )
++        token_ids = request.prompt_token_ids or []
++        # Match up to the last full block of the prompt (excluding the
++        # final token, which will be generated next).
++        num_tokens_to_check = align_to_block_size(
++            len(token_ids) - 1, self._block_size
++        )
++        return num_tokens_to_check - num_computed_tokens, False
++
++    def update_state_after_alloc(
++        self,
++        request: "Request",
++        blocks: "KVCacheBlocks",
++        num_external_tokens: int,
++    ) -> None:
++        """Remember that this request needs KV loaded on the next step."""
++        if num_external_tokens > 0:
++            self._requests_need_load[request.request_id] = request
++
++    def build_connector_meta(
++        self,
++        scheduler_output: SchedulerOutput,
++    ) -> KVConnectorMetadata:
++        """Translate scheduler decisions into worker-visible metadata."""
++        meta = MyPDConnectorMetadata()
++
++        total_need_load = 0
++        for new_req in scheduler_output.scheduled_new_reqs:
++            token_ids = new_req.prompt_token_ids or []
++            mm_hashes = [f.identifier for f in new_req.mm_features]
++            if new_req.req_id in self._requests_need_load:
++                # Decode side: load previously saved KV.
++                meta.add_request(
++                    req_id=new_req.req_id,
++                    token_ids=token_ids,
++                    block_ids=new_req.block_ids[0],
++                    block_size=self._block_size,
++                    is_store=False,
++                    mm_hashes=mm_hashes,
++                )
++                total_need_load += 1
++                logger.info(
++                    "[MyPDConnector] SCHEDULE LOAD request=%s tokens=%d",
++                    new_req.req_id,
++                    len(token_ids),
++                )
++                ttft_event(
++                    new_req.req_id,
++                    "connector_decision_load",
++                    role="scheduler",
++                    extra={"tokens": len(token_ids)},
++                )
++            else:
++                # Prefill side: store KV so decode can reuse it later.
++                if not self._found_match_for_prompt(token_ids, mm_hashes):
++                    meta.add_request(
++                        req_id=new_req.req_id,
++                        token_ids=token_ids,
++                        block_ids=new_req.block_ids[0],
++                        block_size=self._block_size,
++                        is_store=True,
++                        mm_hashes=mm_hashes,
++                    )
++                    logger.info(
++                        "[MyPDConnector] SCHEDULE STORE request=%s tokens=%d",
++                        new_req.req_id,
++                        len(token_ids),
++                    )
++                    ttft_event(
++                        new_req.req_id,
++                        "connector_decision_store",
++                        role="scheduler",
++                        extra={"tokens": len(token_ids)},
++                    )
++
++        cached_reqs = scheduler_output.scheduled_cached_reqs
++        for i, req_id in enumerate(cached_reqs.req_ids):
++            resumed_from_preemption = req_id in cached_reqs.resumed_req_ids
++            if not resumed_from_preemption or req_id not in self._requests_need_load:
++                continue
++
++            num_computed_tokens = cached_reqs.num_computed_tokens[i]
++            num_new_tokens = scheduler_output.num_scheduled_tokens[req_id]
++            new_block_ids = cached_reqs.new_block_ids[i]
++            request = self._requests_need_load[req_id]
++            total_tokens = num_computed_tokens + num_new_tokens
++            token_ids = request.all_token_ids[:total_tokens]
++            assert new_block_ids is not None
++            block_ids = new_block_ids[0]
++
++            meta.add_request(
++                req_id=request.request_id,
++                token_ids=token_ids,
++                block_ids=block_ids,
++                block_size=self._block_size,
++                is_store=False,
++                mm_hashes=[f.identifier for f in request.mm_features],
++            )
++            total_need_load += 1
++
++        assert total_need_load == len(self._requests_need_load)
++        self._requests_need_load.clear()
++        return meta
++
++    # ==========================================================
++    # Helpers
++    # ==========================================================
++    def _found_match_for_request(self, request: "Request") -> bool:
++        return self._found_match_for_prompt(
++            list(request.prompt_token_ids or []),
++            [f.identifier for f in request.mm_features],
++        )
++
++    def _found_match_for_prompt(
++        self,
++        prompt_token_ids: list[int],
++        mm_hashes: list[str],
++    ) -> bool:
++        num_tokens_to_check = align_to_block_size(
++            len(prompt_token_ids) - 1, self._block_size
++        )
++        foldername = self._make_prompt_folder(
++            torch.tensor(prompt_token_ids)[:num_tokens_to_check],
++            mm_hashes,
++            create_folder=False,
++        )
++        return os.path.exists(foldername)
++
++    def _make_prompt_folder(
++        self,
++        token_ids: torch.Tensor,
++        mm_hashes: list[str],
++        create_folder: bool = False,
++    ) -> str:
++        token_bytes = token_ids.numpy().tobytes()
++        if mm_hashes:
++            mm_str = "-".join(mm_hashes)
++            token_bytes += mm_str.encode("utf-8")
++        input_ids_hash = safe_hash(
++            token_bytes, usedforsecurity=False
++        ).hexdigest()
++        foldername = os.path.join(self._storage_path, input_ids_hash)
++        if create_folder:
++            os.makedirs(foldername, exist_ok=True)
++        return foldername
++
++    def _make_layer_file(
++        self,
++        layer_name: str,
++        token_ids: torch.Tensor,
++        mm_hashes: list[str],
++    ) -> str:
++        foldername = self._make_prompt_folder(
++            token_ids, mm_hashes=mm_hashes, create_folder=True
++        )
++        return os.path.join(foldername, f"{layer_name}.safetensors")
++
++
++def align_to_block_size(num_tokens: int, block_size: int) -> int:
++    """Round down to the nearest multiple of block_size."""
++    return (num_tokens - 1) // block_size * block_size
+diff --git a/vllm/distributed/kv_transfer/kv_connector/v1/my_pd_tcp_connector.py b/vllm/distributed/kv_transfer/kv_connector/v1/my_pd_tcp_connector.py
+new file mode 100644
+index 0000000000..399a5c9448
+--- /dev/null
++++ b/vllm/distributed/kv_transfer/kv_connector/v1/my_pd_tcp_connector.py
+@@ -0,0 +1,658 @@
++# SPDX-License-Identifier: Apache-2.0
++# SPDX-FileCopyrightText: Copyright contributors to the vLLM project
++"""
++MyPDTCPConnector: TCP-based disaggregated prefill-decode connector.
++
++Producer (prefill) side binds a TCP socket and pushes KV caches.
++Consumer (decode) side connects to the producer and pulls KV caches.
++"""
++
++import pickle
++import socket
++import struct
++import threading
++import time
++from dataclasses import dataclass, field
++from typing import TYPE_CHECKING, Any
++
++import torch
++
++from vllm.config import VllmConfig
++from vllm.distributed.kv_transfer.kv_connector.v1.base import (
++    KVConnectorBase_V1,
++    KVConnectorMetadata,
++    KVConnectorRole,
++)
++from vllm.logger import init_logger
++from vllm.ttft_logger import ttft_event
++from vllm.model_executor.layers.attention.mla_attention import MLACommonMetadata
++from vllm.utils.gpu_sync_debug import gpu_sync_allowed
++from vllm.utils.hashing import safe_hash
++from vllm.v1.attention.backend import AttentionMetadata
++from vllm.v1.core.sched.output import SchedulerOutput
++
++if TYPE_CHECKING:
++    from vllm.forward_context import ForwardContext
++    from vllm.v1.core.kv_cache_manager import KVCacheBlocks
++    from vllm.v1.kv_cache_interface import KVCacheConfig
++    from vllm.v1.request import Request
++
++logger = init_logger(__name__)
++
++MAGIC = b"KVTM"
++_HEADER_FMT = "!4sI"  # magic + message total length (after header)
++
++# Module-level singleton state shared between the worker and scheduler
++# connector instances that live in the same process.
++_server_sock: socket.socket | None = None
++_kv_cache: dict[tuple[str, str], torch.Tensor] = {}
++_available_keys: set[str] = set()
++_lock = threading.Lock()
++
++
++@dataclass
++class MyPDTCPReqMeta:
++    """Per-request metadata carried from scheduler to worker."""
++
++    req_id: str
++    token_ids: torch.Tensor
++    slot_mapping: torch.Tensor
++    is_store: bool
++    mm_hashes: list[str]
++
++    @staticmethod
++    def make_meta(
++        req_id: str,
++        token_ids: list[int],
++        block_ids: list[int],
++        block_size: int,
++        is_store: bool,
++        mm_hashes: list[str],
++    ) -> "MyPDTCPReqMeta":
++        valid_num_tokens = align_to_block_size(len(token_ids), block_size)
++        token_ids_tensor = torch.tensor(token_ids)[:valid_num_tokens]
++        block_ids_tensor = torch.tensor(block_ids)
++        num_blocks = block_ids_tensor.shape[0]
++        block_offsets = torch.arange(0, block_size)
++        slot_mapping = (
++            block_offsets.reshape((1, block_size))
++            + block_ids_tensor.reshape((num_blocks, 1)) * block_size
++        )
++        slot_mapping = slot_mapping.flatten()[:valid_num_tokens]
++        return MyPDTCPReqMeta(
++            req_id=req_id,
++            token_ids=token_ids_tensor,
++            slot_mapping=slot_mapping,
++            is_store=is_store,
++            mm_hashes=mm_hashes,
++        )
++
++
++@dataclass
++class MyPDTCPConnectorMetadata(KVConnectorMetadata):
++    requests: list[MyPDTCPReqMeta] = field(default_factory=list)
++
++    def add_request(
++        self,
++        req_id: str,
++        token_ids: list[int],
++        block_ids: list[int],
++        block_size: int,
++        is_store: bool,
++        mm_hashes: list[str],
++    ) -> None:
++        self.requests.append(
++            MyPDTCPReqMeta.make_meta(
++                req_id, token_ids, block_ids, block_size, is_store, mm_hashes
++            )
++        )
++
++
++class MyPDTCPConnector(KVConnectorBase_V1):
++    """
++    TCP-based PD connector.
++
++    - Producer (prefill): binds a TCP socket, stores generated KV in memory,
++      and serves it to consumers.
++    - Consumer (decode): connects to producer, queries whether KV exists,
++      and pulls KV tensors into the local paged buffer.
++
++    Note: vLLM creates two connector instances per engine, one for the
++    scheduler and one for the worker. In server mode we start the TCP listener
++    only from the worker instance; both instances share the module-level KV
++    cache and availability set.
++    """
++
++    def __init__(
++        self,
++        vllm_config: "VllmConfig",
++        role: KVConnectorRole,
++        kv_cache_config: "KVCacheConfig",
++    ):
++        super().__init__(
++            vllm_config=vllm_config,
++            role=role,
++            kv_cache_config=kv_cache_config,
++        )
++        self._block_size = vllm_config.cache_config.block_size
++        self._requests_need_load: dict[str, Request] = {}
++
++        self._mode = self._kv_transfer_config.get_from_extra_config("mode", "server")
++        self._host = self._kv_transfer_config.get_from_extra_config("host", "127.0.0.1")
++        self._port = int(self._kv_transfer_config.get_from_extra_config("port", 12345))
++        # Wire dtype for KV transfer. "native" sends the stored dtype as-is;
++        # otherwise the tensor is cast to this torch dtype before sending.
++        self._wire_dtype = self._kv_transfer_config.get_from_extra_config(
++            "wire_dtype", "float32"
++        )
++        # Ablation switches, both default off. disable_save skips KV storage
++        # on the producer side (PD then degenerates to local prefill on the
++        # decode engine). save_timing logs per-layer copy/store breakdown.
++        self._disable_save = bool(
++            self._kv_transfer_config.get_from_extra_config("disable_save", False)
++        )
++        self._save_timing = bool(
++            self._kv_transfer_config.get_from_extra_config("save_timing", False)
++        )
++
++        self._socket: socket.socket | None = None
++        self._client_socks: list[socket.socket] = []
++
++        global _server_sock
++        if self._mode == "server":
++            # Only the worker instance binds the listening socket.
++            if role == KVConnectorRole.WORKER:
++                self._start_server()
++            else:
++                logger.info(
++                    "[MyPDTCPConnector] scheduler instance shares worker state"
++                )
++        else:
++            self._connect_client()
++
++        logger.info(
++            "[MyPDTCPConnector] role=%s mode=%s host=%s port=%d wire_dtype=%s "
++            "disable_save=%s save_timing=%s",
++            role.name,
++            self._mode,
++            self._host,
++            self._port,
++            self._wire_dtype,
++            self._disable_save,
++            self._save_timing,
++        )
++
++    # ==========================================================
++    # TCP helpers
++    # ==========================================================
++    def _start_server(self) -> None:
++        global _server_sock
++        if _server_sock is not None:
++            self._socket = _server_sock
++            logger.info("[MyPDTCPConnector] reusing existing server socket")
++            return
++
++        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
++        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
++        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
++        sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 16 * 1024 * 1024)
++        sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 16 * 1024 * 1024)
++        sock.bind((self._host, self._port))
++        sock.listen(8)
++        _server_sock = sock
++        self._socket = sock
++        t = threading.Thread(target=self._accept_loop, daemon=True)
++        t.start()
++
++    def _accept_loop(self) -> None:
++        global _server_sock
++        assert _server_sock is not None
++        while True:
++            conn, addr = _server_sock.accept()
++            conn.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
++            conn.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 16 * 1024 * 1024)
++            conn.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 16 * 1024 * 1024)
++            logger.info("[MyPDTCPConnector] server accepted connection from %s", addr)
++            t = threading.Thread(target=self._handle_client, args=(conn,), daemon=True)
++            t.start()
++
++    def _handle_client(self, conn: socket.socket) -> None:
++        try:
++            while True:
++                req = self._recv_msg(conn)
++                if req is None:
++                    break
++                msg_type = req.get("type")
++                if msg_type == "query":
++                    key = req["key"]
++                    with _lock:
++                        exists = key in _available_keys
++                    self._send_msg(conn, {"type": "reply", "exists": exists})
++                elif msg_type == "get":
++                    key = req["key"]
++                    layer_name = req["layer_name"]
++                    with _lock:
++                        tensor = _kv_cache.get((key, layer_name))
++                    if tensor is None:
++                        self._send_msg(conn, {"type": "kv", "found": False})
++                    else:
++                        # Cast to the configured wire dtype before
++                        # serializing; "native" sends the stored dtype as-is.
++                        wire_tensor = tensor
++                        if self._wire_dtype != "native":
++                            wire_tensor = tensor.to(
++                                getattr(torch, self._wire_dtype)
++                            )
++                        original_dtype = str(wire_tensor.dtype).split(".")[-1]
++                        raw_bytes = (
++                            wire_tensor.contiguous().view(torch.uint8).numpy().tobytes()
++                        )
++                        self._send_msg(
++                            conn,
++                            {
++                                "type": "kv",
++                                "found": True,
++                                "shape": list(tensor.shape),
++                                "dtype": original_dtype,
++                                "data": raw_bytes,
++                            },
++                        )
++                else:
++                    logger.warning("[MyPDTCPConnector] unknown msg type: %s", msg_type)
++        except ConnectionResetError:
++            pass
++        finally:
++            conn.close()
++
++    def _connect_client(self) -> None:
++        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
++        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
++        sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 16 * 1024 * 1024)
++        sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 16 * 1024 * 1024)
++        sock.connect((self._host, self._port))
++        self._socket = sock
++
++    def _send_msg(self, conn: socket.socket, payload: dict[str, Any]) -> None:
++        body = pickle.dumps(payload)
++        header = struct.pack(_HEADER_FMT, MAGIC, len(body))
++        conn.sendall(header + body)
++
++    def _recv_msg(self, conn: socket.socket) -> dict[str, Any] | None:
++        header = self._recv_all(conn, struct.calcsize(_HEADER_FMT))
++        if not header:
++            return None
++        magic, body_len = struct.unpack(_HEADER_FMT, header)
++        if magic != MAGIC:
++            raise ValueError(f"Bad magic: {magic}")
++        body = self._recv_all(conn, body_len)
++        if not body:
++            return None
++        return pickle.loads(body)
++
++    def _recv_all(self, conn: socket.socket, n: int) -> bytes:
++        buf = b""
++        while len(buf) < n:
++            chunk = conn.recv(n - len(buf))
++            if not chunk:
++                return b""
++            buf += chunk
++        return buf
++
++    def _query_key_exists(self, key: str) -> bool:
++        if self._mode == "server":
++            with _lock:
++                return key in _available_keys
++        assert self._socket is not None
++        self._send_msg(self._socket, {"type": "query", "key": key})
++        reply = self._recv_msg(self._socket)
++        assert reply is not None
++        return reply.get("exists", False)
++
++    def _fetch_kv(self, key: str, layer_name: str) -> torch.Tensor | None:
++        if self._mode == "server":
++            with _lock:
++                tensor = _kv_cache.get((key, layer_name))
++            return tensor
++
++        assert self._socket is not None
++        self._send_msg(self._socket, {"type": "get", "key": key, "layer_name": layer_name})
++        reply = self._recv_msg(self._socket)
++        assert reply is not None
++        if not reply.get("found"):
++            return None
++
++        shape = reply["shape"]
++        original_dtype = getattr(torch, reply["dtype"])
++
++        # Reinterpret the raw bytes in the dtype recorded by the server.
++        tensor = (
++            torch.frombuffer(reply["data"], dtype=torch.uint8)
++            .view(original_dtype)
++            .reshape(shape)
++            .clone()
++        )
++        return tensor
++
++    # ==========================================================
++    # Worker-side: load KV from TCP producer into vLLM buffer
++    # ==========================================================
++    def start_load_kv(
++        self, forward_context: "ForwardContext", **kwargs: Any
++    ) -> None:
++        """Called before model forward on the decode (consumer) worker."""
++
++        def inject_kv_into_layer(
++            dst_kv_cache_layer: torch.Tensor,
++            src_kv_cache: torch.Tensor,
++            slot_mapping: torch.Tensor,
++            attn_metadata: AttentionMetadata,
++        ) -> None:
++            slot_mapping = slot_mapping.to(
++                dst_kv_cache_layer.device, non_blocking=True
++            )
++            if isinstance(attn_metadata, MLACommonMetadata):
++                num_pages, page_size = dst_kv_cache_layer.shape[:2]
++                dst_kv_cache_layer = dst_kv_cache_layer.reshape(
++                    num_pages * page_size, -1
++                )
++                dst_kv_cache_layer[slot_mapping, ...] = src_kv_cache
++            else:
++                block_idxs = slot_mapping // self._block_size
++                offsets = slot_mapping % self._block_size
++                dst_kv_cache_layer[block_idxs, :, offsets] = src_kv_cache
++
++        metadata = self._get_connector_metadata()
++        assert isinstance(metadata, MyPDTCPConnectorMetadata)
++
++        attn_metadata = forward_context.attn_metadata
++        if attn_metadata is None:
++            logger.warning(
++                "[MyPDTCPConnector] start_load_kv called but attn_metadata is None"
++            )
++            return
++
++        for request in metadata.requests:
++            if request.is_store:
++                continue
++            ttft_event(
++                request.req_id,
++                "kv_load_start",
++                role="decode",
++                extra={"tokens": len(request.slot_mapping)},
++            )
++            logger.info(
++                "[MyPDTCPConnector] LOADING %d tokens from TCP into paged KV cache",
++                len(request.slot_mapping),
++            )
++            for layer_name in forward_context.no_compile_layers:
++                layer = forward_context.no_compile_layers[layer_name]
++                kv_cache_layer = getattr(layer, "kv_cache", None)
++                if kv_cache_layer is None:
++                    continue
++
++                key = self._make_key(request.token_ids, request.mm_hashes)
++                kv_cache_cpu = self._fetch_kv(key, layer_name)
++                if kv_cache_cpu is None:
++                    logger.warning(
++                        "[MyPDTCPConnector] missing KV for key=%s layer=%s",
++                        key,
++                        layer_name,
++                    )
++                    continue
++
++                kv_cache = kv_cache_cpu.to(
++                    device=kv_cache_layer.device,
++                    dtype=kv_cache_layer.dtype,
++                    non_blocking=True,
++                )
++                if isinstance(attn_metadata, dict):
++                    inject_kv_into_layer(
++                        kv_cache_layer,
++                        kv_cache,
++                        request.slot_mapping,
++                        attn_metadata[layer_name],
++                    )
++                    logger.info(
++                        "[MyPDTCPConnector] injected layer %s for request",
++                        layer_name,
++                    )
++            ttft_event(
++                request.req_id,
++                "kv_load_end",
++                role="decode",
++                extra={"tokens": len(request.slot_mapping)},
++            )
++
++    def wait_for_layer_load(self, layer_name: str) -> None:
++        return
++
++    # ==========================================================
++    # Worker-side: save KV from vLLM buffer to TCP consumers
++    # ==========================================================
++    def save_kv_layer(
++        self,
++        layer_name: str,
++        kv_layer: torch.Tensor,
++        attn_metadata: AttentionMetadata,
++        **kwargs: Any,
++    ) -> None:
++        """Called inside model forward on the prefill (producer) worker."""
++
++        def extract_kv_from_layer(
++            layer: torch.Tensor, slot_mapping: torch.Tensor
++        ) -> torch.Tensor:
++            slot_mapping = slot_mapping.to(layer.device, non_blocking=True)
++            if isinstance(attn_metadata, MLACommonMetadata):
++                num_pages, page_size = layer.shape[:2]
++                return layer.reshape(num_pages * page_size, -1)[
++                    slot_mapping, ...
++                ]
++            block_idxs = slot_mapping // self._block_size
++            offsets = slot_mapping % self._block_size
++            return layer[block_idxs, :, offsets]
++
++        connector_metadata = self._get_connector_metadata()
++        assert isinstance(connector_metadata, MyPDTCPConnectorMetadata)
++        for request in connector_metadata.requests:
++            if request.is_store:
++                if self._disable_save:
++                    if "layers.0." in layer_name:
++                        logger.info(
++                            "[MyPDTCPConnector] SAVE DISABLED req=%s tokens=%d",
++                            request.req_id,
++                            len(request.slot_mapping),
++                        )
++                    continue
++                key = self._make_key(request.token_ids, request.mm_hashes)
++                ttft_event(
++                    request.req_id,
++                    "kv_save_start",
++                    role="prefill",
++                    extra={"tokens": len(request.slot_mapping), "layer": layer_name},
++                )
++                kv_cache = extract_kv_from_layer(kv_layer, request.slot_mapping)
++                t0 = time.perf_counter()
++                with gpu_sync_allowed():
++                    kv_cache_cpu = kv_cache.detach().cpu()
++                t1 = time.perf_counter()
++                with _lock:
++                    _kv_cache[(key, layer_name)] = kv_cache_cpu
++                    _available_keys.add(key)
++                t2 = time.perf_counter()
++                if self._save_timing:
++                    logger.info(
++                        "[MyPDTCPConnector] SAVE_TIMING layer=%s "
++                        "copy=%.3fms store=%.3fms total=%.3fms",
++                        layer_name,
++                        (t1 - t0) * 1000,
++                        (t2 - t1) * 1000,
++                        (t2 - t0) * 1000,
++                    )
++                logger.info(
++                    "[MyPDTCPConnector] STORED key=%s layer=%s tokens=%d",
++                    key,
++                    layer_name,
++                    len(request.slot_mapping),
++                )
++                ttft_event(
++                    request.req_id,
++                    "kv_save_end",
++                    role="prefill",
++                    extra={"tokens": len(request.slot_mapping), "layer": layer_name},
++                )
++
++    def wait_for_save(self) -> None:
++        return
++
++    # ==========================================================
++    # Scheduler-side: decide what KV can be reused
++    # ==========================================================
++    def get_num_new_matched_tokens(
++        self,
++        request: "Request",
++        num_computed_tokens: int,
++    ) -> tuple[int | None, bool]:
++        if not self._found_match_for_request(request):
++            return 0, False
++
++        logger.info(
++            "[MyPDTCPConnector] CACHE HIT for request %s", request.request_id
++        )
++        token_ids = request.prompt_token_ids or []
++        num_tokens_to_check = align_to_block_size(
++            len(token_ids), self._block_size
++        )
++        return num_tokens_to_check - num_computed_tokens, False
++
++    def update_state_after_alloc(
++        self,
++        request: "Request",
++        blocks: "KVCacheBlocks",
++        num_external_tokens: int,
++    ) -> None:
++        if num_external_tokens > 0:
++            self._requests_need_load[request.request_id] = request
++
++    def build_connector_meta(
++        self,
++        scheduler_output: SchedulerOutput,
++    ) -> KVConnectorMetadata:
++        meta = MyPDTCPConnectorMetadata()
++
++        total_need_load = 0
++        for new_req in scheduler_output.scheduled_new_reqs:
++            token_ids = new_req.prompt_token_ids or []
++            mm_hashes = [f.identifier for f in new_req.mm_features]
++            if new_req.req_id in self._requests_need_load:
++                meta.add_request(
++                    req_id=new_req.req_id,
++                    token_ids=token_ids,
++                    block_ids=new_req.block_ids[0],
++                    block_size=self._block_size,
++                    is_store=False,
++                    mm_hashes=mm_hashes,
++                )
++                total_need_load += 1
++                logger.info(
++                    "[MyPDTCPConnector] SCHEDULE LOAD request=%s tokens=%d",
++                    new_req.req_id,
++                    len(token_ids),
++                )
++                ttft_event(
++                    new_req.req_id,
++                    "connector_decision_load",
++                    role="scheduler",
++                    extra={"tokens": len(token_ids)},
++                )
++            else:
++                if not self._found_match_for_prompt(token_ids, mm_hashes):
++                    meta.add_request(
++                        req_id=new_req.req_id,
++                        token_ids=token_ids,
++                        block_ids=new_req.block_ids[0],
++                        block_size=self._block_size,
++                        is_store=True,
++                        mm_hashes=mm_hashes,
++                    )
++                    logger.info(
++                        "[MyPDTCPConnector] SCHEDULE STORE request=%s tokens=%d",
++                        new_req.req_id,
++                        len(token_ids),
++                    )
++                    ttft_event(
++                        new_req.req_id,
++                        "connector_decision_store",
++                        role="scheduler",
++                        extra={"tokens": len(token_ids)},
++                    )
++
++        cached_reqs = scheduler_output.scheduled_cached_reqs
++        for i, req_id in enumerate(cached_reqs.req_ids):
++            resumed_from_preemption = req_id in cached_reqs.resumed_req_ids
++            if not resumed_from_preemption or req_id not in self._requests_need_load:
++                continue
++
++            num_computed_tokens = cached_reqs.num_computed_tokens[i]
++            num_new_tokens = scheduler_output.num_scheduled_tokens[req_id]
++            new_block_ids = cached_reqs.new_block_ids[i]
++            request = self._requests_need_load[req_id]
++            total_tokens = num_computed_tokens + num_new_tokens
++            token_ids = request.all_token_ids[:total_tokens]
++            assert new_block_ids is not None
++            block_ids = new_block_ids[0]
++
++            meta.add_request(
++                req_id=request.request_id,
++                token_ids=token_ids,
++                block_ids=block_ids,
++                block_size=self._block_size,
++                is_store=False,
++                mm_hashes=[f.identifier for f in request.mm_features],
++            )
++            total_need_load += 1
++
++        assert total_need_load == len(self._requests_need_load)
++        self._requests_need_load.clear()
++        return meta
++
++    # ==========================================================
++    # Helpers
++    # ==========================================================
++    def _found_match_for_request(self, request: "Request") -> bool:
++        return self._found_match_for_prompt(
++            list(request.prompt_token_ids or []),
++            [f.identifier for f in request.mm_features],
++        )
++
++    def _found_match_for_prompt(
++        self,
++        prompt_token_ids: list[int],
++        mm_hashes: list[str],
++    ) -> bool:
++        # Must match the producer's store-side alignment in
++        # MyPDTCPReqMeta.make_meta, otherwise the keys diverge whenever
++        # len(prompt_token_ids) % block_size == 1.
++        num_tokens_to_check = align_to_block_size(
++            len(prompt_token_ids), self._block_size
++        )
++        key = self._make_key(
++            torch.tensor(prompt_token_ids)[:num_tokens_to_check],
++            mm_hashes,
++        )
++        return self._query_key_exists(key)
++
++    def _make_key(
++        self,
++        token_ids: torch.Tensor,
++        mm_hashes: list[str],
++    ) -> str:
++        token_bytes = token_ids.numpy().tobytes()
++        if mm_hashes:
++            mm_str = "-".join(mm_hashes)
++            token_bytes += mm_str.encode("utf-8")
++        return safe_hash(token_bytes, usedforsecurity=False).hexdigest()
++
++
++def align_to_block_size(num_tokens: int, block_size: int) -> int:
++    """Round down to the nearest multiple of block_size."""
++    return (num_tokens - 1) // block_size * block_size
+diff --git a/vllm/entrypoints/llm.py b/vllm/entrypoints/llm.py
+index e3d0b2f1e5..42cee433b9 100644
+--- a/vllm/entrypoints/llm.py
++++ b/vllm/entrypoints/llm.py
+@@ -343,6 +343,7 @@ class LLM(BeamSearchOfflineMixin, PoolingOfflineMixin, OfflineInferenceMixin):
+         self.llm_engine = LLMEngine.from_engine_args(
+             engine_args=engine_args, usage_context=UsageContext.LLM_CLASS
+         )
++        logger.info("Hello, this is my first modified log in vLLM!")
+         self.model_config = self.llm_engine.model_config
+         self.engine_class = type(self.llm_engine)
+ 
+diff --git a/vllm/envs.py b/vllm/envs.py
+index e410dd7f54..d193737906 100755
+--- a/vllm/envs.py
++++ b/vllm/envs.py
+@@ -253,6 +253,9 @@ if TYPE_CHECKING:
+     VLLM_ROCM_QUICK_REDUCE_MIN_SIZE_BYTES_MB: int | None = None
+     VLLM_ROCM_QUICK_REDUCE_QUANTIZATION_MIN_SIZE_KB: int | None = None
+     VLLM_MOONCAKE_ABORT_REQUEST_TIMEOUT: int = 480
++    VLLM_MOONCAKE_GATHER: bool = False
++    VLLM_MOONCAKE_GATHER_BUF_MB: int = 512
++    VLLM_MOONCAKE_GATHER_SLOTS: int = 4
+     VLLM_ENABLE_CUDAGRAPH_GC: bool = False
+     VLLM_LOOPBACK_IP: str = ""
+     VLLM_ALLOW_CHUNKED_LOCAL_ATTN_WITH_HYBRID_KV_CACHE: bool = True
+@@ -1808,6 +1811,24 @@ environment_variables: dict[str, Callable[[], Any]] = {
+     "VLLM_MOONCAKE_ABORT_REQUEST_TIMEOUT": lambda: int(
+         os.getenv("VLLM_MOONCAKE_ABORT_REQUEST_TIMEOUT", "480")
+     ),
++    # Mooncake connector: gather scattered KV blocks into a pinned staging
++    # buffer and push them to the decoder's staging buffer as one descriptor,
++    # instead of one descriptor per contiguous block run. Both sides must
++    # opt in for the path to activate.
++    "VLLM_MOONCAKE_GATHER": lambda: bool(int(os.getenv("VLLM_MOONCAKE_GATHER", "0"))),
++    # Size in MiB of one pinned gather buffer slot used by
++    # VLLM_MOONCAKE_GATHER. Transfer batches larger than the slot fall
++    # back to per-descriptor transfer.
++    "VLLM_MOONCAKE_GATHER_BUF_MB": lambda: int(
++        os.getenv("VLLM_MOONCAKE_GATHER_BUF_MB", "512")
++    ),
++    # Number of gather buffer slots. The consumer hands out one slot per
++    # in-flight pull (the network writes into it outside any lock); when
++    # all slots are busy the pull advertises addr=0 and the producer falls
++    # back to per-descriptor transfer.
++    "VLLM_MOONCAKE_GATHER_SLOTS": lambda: int(
++        os.getenv("VLLM_MOONCAKE_GATHER_SLOTS", "4")
++    ),
+     # If set, it means we pre-downloaded cubin files and flashinfer will
+     # read the cubin files directly.
+     "VLLM_HAS_FLASHINFER_CUBIN": lambda: bool(
+diff --git a/vllm/ttft_logger.py b/vllm/ttft_logger.py
+new file mode 100644
+index 0000000000..7e2f8f651f
+--- /dev/null
++++ b/vllm/ttft_logger.py
+@@ -0,0 +1,19 @@
++import json
++import time
++
++from vllm.logger import init_logger
++
++_logger = init_logger(__name__)
++
++
++def ttft_event(req_id, event, role="engine", extra=None):
++    entry = {
++        "ts_ns": time.perf_counter_ns(),
++        "event": event,
++        "role": role,
++    }
++    if req_id is not None:
++        entry["req_id"] = req_id
++    if extra:
++        entry.update(extra)
++    _logger.info("[TTFT] %s", json.dumps(entry, ensure_ascii=False))
+\ No newline at end of file
+diff --git a/vllm/v1/core/sched/scheduler.py b/vllm/v1/core/sched/scheduler.py
+index 26674154c6..898306e249 100644
+--- a/vllm/v1/core/sched/scheduler.py
++++ b/vllm/v1/core/sched/scheduler.py
+@@ -67,6 +67,8 @@ from vllm.v1.spec_decode.metrics import SpecDecodingStats
+ from vllm.v1.structured_output import StructuredOutputGrammar, StructuredOutputManager
+ from vllm.v1.utils import record_function_or_nullcontext
+ 
++from vllm.ttft_logger import ttft_event
++
+ logger = init_logger(__name__)
+ 
+ 
+@@ -1125,6 +1127,7 @@ class Scheduler(SchedulerInterface):
+                     request.record_event(
+                         EngineCoreEventType.SCHEDULED, scheduled_timestamp
+                     )
++                ttft_event(request_id, "req_scheduled", role="scheduler")
+                 if request.status == RequestStatus.WAITING:
+                     scheduled_new_reqs.append(request)
+                 elif request.status == RequestStatus.PREEMPTED:
+@@ -1328,7 +1331,10 @@ class Scheduler(SchedulerInterface):
+     def _build_kv_connector_meta(
+         self, connector: KVConnectorBase_V1, scheduler_output: SchedulerOutput
+     ) -> KVConnectorMetadata:
+-        return connector.build_connector_meta(scheduler_output)
++        ttft_event(None, "connector_meta_start", role="scheduler")
++        meta = connector.build_connector_meta(scheduler_output)
++        ttft_event(None, "connector_meta_end", role="scheduler")
++        return meta
+ 
+     def _get_new_block_ids_to_zero(self) -> list[int] | None:
+         # Drain new attention block ids every step so the manager-side list
+@@ -2355,6 +2361,7 @@ class Scheduler(SchedulerInterface):
+                 self.connector.on_new_request(request)
+             if self.log_stats:
+                 request.record_event(EngineCoreEventType.QUEUED)
++            ttft_event(request.request_id, "req_queued", role="scheduler")
+ 
+     def finish_requests(
+         self, request_ids: str | Iterable[str] | None, finished_status: RequestStatus
+@@ -2423,6 +2430,7 @@ class Scheduler(SchedulerInterface):
+         self, request: Request, delay_free_blocks: bool = False
+     ) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+         assert request.is_finished()
++        ttft_event(request.request_id, "free_request", role="scheduler")
+ 
+         self._inflight_prefills.discard(request)
+         connector_delay_free_blocks, kv_xfer_params = self._connector_finished(request)
+diff --git a/vllm/v1/engine/llm_engine.py b/vllm/v1/engine/llm_engine.py
+index 274da62918..5b0cdd556f 100644
+--- a/vllm/v1/engine/llm_engine.py
++++ b/vllm/v1/engine/llm_engine.py
+@@ -40,6 +40,8 @@ from vllm.v1.metrics.stats import IterationStats
+ from vllm.v1.utils import record_function_or_nullcontext
+ from vllm.v1.worker.worker_base import WorkerBase
+ 
++from vllm.ttft_logger import ttft_event
++
+ logger = init_logger(__name__)
+ 
+ _R = TypeVar("_R", default=Any)
+@@ -265,6 +267,7 @@ class LLMEngine:
+         self.input_processor.assign_request_id(request)
+ 
+         req_id = request.request_id
++        ttft_event(req_id, "req_arrived", role="frontend")
+ 
+         # Use cloned params that may have been updated in process_inputs()
+         params = request.params
+diff --git a/vllm/v1/worker/gpu/model_runner.py b/vllm/v1/worker/gpu/model_runner.py
+index 93a8af4f06..b06a81a6e7 100644
+--- a/vllm/v1/worker/gpu/model_runner.py
++++ b/vllm/v1/worker/gpu/model_runner.py
+@@ -37,6 +37,7 @@ from vllm.distributed.parallel_state import (
+ )
+ from vllm.forward_context import BatchDescriptor, set_forward_context
+ from vllm.logger import init_logger
++from vllm.ttft_logger import ttft_event
+ from vllm.model_executor.layers.fused_moe.all2all_utils import get_ep_all2all_manager
+ from vllm.model_executor.layers.fused_moe.routed_experts_capturer import (
+     RoutedExpertsCapturer,
+@@ -1437,6 +1438,9 @@ class GPUModelRunner(LoRAModelRunnerMixin):
+                     scheduler_output, empty_output
+                 )
+ 
++            for req_id in scheduler_output.num_scheduled_tokens:
++                ttft_event(req_id, "worker_execute_start", role="worker")
++
+         # Get batch descriptor and sync across DP ranks.
+         num_reqs = len(scheduler_output.num_scheduled_tokens)
+         num_toks = scheduler_output.total_num_scheduled_tokens
+@@ -1632,6 +1636,8 @@ class GPUModelRunner(LoRAModelRunnerMixin):
+             input_batch, batch_desc.cg_mode == CUDAGraphMode.FULL
+         )
+         self.step_timing.forward_start()
++        for req_id in scheduler_output.num_scheduled_tokens:
++            ttft_event(req_id, "model_forward_start", role="worker")
+ 
+         # Run model.
+         if batch_desc.cg_mode == CUDAGraphMode.FULL:
+@@ -1673,6 +1679,9 @@ class GPUModelRunner(LoRAModelRunnerMixin):
+                     # Eager (NONE): call the raw model directly.
+                     model_output = self.model(**model_inputs)
+ 
++        for req_id in scheduler_output.num_scheduled_tokens:
++            ttft_event(req_id, "model_forward_end", role="worker")
++
+         if self.is_last_pp_rank:
+             if self.use_aux_hidden_state_outputs:
+                 assert isinstance(model_output, tuple)
+@@ -1757,6 +1766,8 @@ class GPUModelRunner(LoRAModelRunnerMixin):
+         sampler_output, num_sampled, num_rejected = self.sample(
+             hidden_states, input_batch, grammar_output
+         )
++        for req_id in input_batch.req_ids:
++            ttft_event(req_id, "first_token_generated", role="worker")
+ 
+         if self.pp_handler is not None:
+             # Broadcast to non-last PP ranks (handles spec decode multi-token).

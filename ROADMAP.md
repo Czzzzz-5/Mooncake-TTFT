@@ -1,5 +1,32 @@
 # ROADMAP
 
+## 主线（2026-10，当前形态）：数据面下沉到 Mooncake 引擎
+
+学长定性判断"拷贝/发送方向掌控在 vLLM 手里就没法并行多 buffer"被 T8
+数据证实后，10-10 起执行下沉方案：gather/staging/传输所有权从 vLLM
+connector 移到 Mooncake 引擎，vLLM 只交段表。**主卡
+`experiments/2026-10-10-sink-staging-to-engine.md`（§1-14）** 记录全部
+设计、分期 A/B 与踩坑。
+
+- [x] **T8（10-09）**：TCP 并发解剖 + 多 io 线程修复（fork `12a6f397`）
+- [x] **M1（10-10）**：vLLM 侧多槽 + async submit——机制目标达成但
+      端到端倒挂（并发摊薄单流带宽），**教训：并行化必须先解聚合带宽**
+- [x] **M2a（10-11）**：引擎侧 gather 落地（fork `bbd3f18f`
+      `submit_gather_write`），p50 **-9.2%**、mean **-20.4%**，倒挂消除
+- [x] **收敛（10-13）**：M1 路径删除；vLLM connector 只剩协议薄层
+- [x] **M3（10-13）**：D 侧对称下沉（fork `91141140`），接收槽+scatter
+      进引擎；`cudaMemcpyBatchAsync` 批量拷贝（scatter 36-44ms→17ms）
+- [x] **100k 长 prompt（10-13）**：YaRN-128k，新路 4/4 成功
+      （老路 1/3，17.5 万描述符超上限挂死）；gather 11.1s→0.24s
+- [x] **M2b（10-13）**：拆条吃满多 lane（fork `27a83e8a`），
+      100k 网络段 2.4-2.9s→**0.31-0.41s**，总耗时 21.2s→**18.5s**
+
+最终形态：vLLM 锁页占用两侧归零；引擎侧能力是自包含通用 API，
+为 Mooncake 社区贡献的目标形态。遗留：批量拷贝每进程首次 ~9s 暖池
+（生产应在 init 预热）；逐描述符老路在极端描述符数下的鲁棒性。
+
+## 历史：早期基线与 staging v1/v2a（2026-09）
+
 ## 已完成
 
 - [x] **Mooncake TCP 接入**（09-06）：官方 MooncakeConnector，P2P 直连，
@@ -70,7 +97,8 @@
       三轮 A/B（seeds 777/888/123），双模消失、三轮同向 −26~−35ms，
       descs=1 证据齐全。详见实验卡。
 
-- [ ] **v2b 多槽流水（降级为可选配套，Mooncake fork 侧）**：传输切片 +
+- [ ] ~~**v2b 多槽流水**~~ — **已被 M2b 取代**（10-13）：拆条多 lane 在
+      引擎侧实现且协议零改动，见顶部主线。原设计记录保留备查：传输切片 +
       多槽循环复用，拷第 i+1 片与发第 i 片重叠。设计参数（R1 实测）：
       拷贝 57GB/s vs TCP 4.1GB/s（32MB 起平台），t_copy:t_send≈1:7 →
       SLOT_MB=32、SLOTS=4。注意：v2a 走 CPU 路径后 KV 不经过槽池，
@@ -89,11 +117,17 @@
 
 ## 代码资产
 
-- Mooncake fork 分支 `gpu-staging-v1`：`gpu_staging_pool.h`（新文件）+
-  `tcp_transport_session_impl.h`（4 处 GPU 分支）。
+- Mooncake fork 分支 `gpu-staging-v1`：`gpu_staging_pool.h`（staging 槽池
+  + `gatherDeviceToHost`/`scatterHostToDevice` 批量拷贝）、引擎侧
+  gather/scatter pybind 接口（`submit_gather_write` /
+  `acquire_scatter_slot` / `submit_scatter_to_device` / 还槽）、
+  TCP 多 io 线程修复、拆条多 lane。
+- vLLM 侧改动：`patches/vllm-mooncake-gpu-staging.patch`（全量单文件，
+  演进故事见 `patches/README.md`）。
 - 测量工具：`scripts/pinned_copy_bench.py`（纯拷贝带宽）、
   `scripts/mooncake_tcp_bench.py`（TCP/staging 全程）、
-  `scripts/dissect_epoch.py`（epoch 打点解剖）。
+  `scripts/dissect_epoch.py`（epoch 打点解剖）、
+  `scripts/gen_prompt_tokens.py`（精确 token 数 prompt 生成）。
 - 工具链文档：`PROFILING.md`（nsys/torch profiler/py-spy 用法与坑）。
 
 ## 远期（需要硬件条件）
