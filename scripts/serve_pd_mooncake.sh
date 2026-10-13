@@ -31,7 +31,10 @@ if [ -n "$GATHER" ]; then
 fi
 export HF_HUB_OFFLINE=1
 export VLLM_LOGGING_LEVEL=DEBUG  # 真实性核验用：decode 侧逐请求 "pulling kv_caches ... finished"
-MODEL="Qwen/Qwen2.5-7B-Instruct"
+MODEL="${MODEL:-Qwen/Qwen2.5-7B-Instruct}"
+# 用本地补丁目录（如 YaRN 128k 扩展版）时，API 暴露的模型名保持原名，
+# client/测量脚本不用改：SERVED_NAME=Qwen/Qwen2.5-7B-Instruct
+SERVED_NAME="${SERVED_NAME:-$MODEL}"
 VLLM="/home/wuzichun/llm_serve_demo/vllm-repo/.venv/bin/vllm"
 PYTHON="/home/wuzichun/llm_serve_demo/vllm-repo/.venv/bin/python"
 REPO="/home/wuzichun/llm_serve_demo/vllm-repo"
@@ -46,7 +49,7 @@ fi
 
 case "$1" in
   prefill)
-    CUDA_VISIBLE_DEVICES=1 VLLM_MOONCAKE_BOOTSTRAP_PORT=8998 "$VLLM" serve "$MODEL" \
+    CUDA_VISIBLE_DEVICES=1 VLLM_MOONCAKE_BOOTSTRAP_PORT=8998 "$VLLM" serve "$MODEL" --served-model-name "$SERVED_NAME" \
       --port 8100 \
       --enforce-eager \
       --gpu-memory-utilization 0.85 \
@@ -57,7 +60,7 @@ case "$1" in
     ;;
   prefill2)
     # 第二个 P 实例（2P1D 拓扑 / 并发污染复现用）：GPU0、端口 8101、bootstrap 8999
-    CUDA_VISIBLE_DEVICES=0 VLLM_MOONCAKE_BOOTSTRAP_PORT=8999 "$VLLM" serve "$MODEL" \
+    CUDA_VISIBLE_DEVICES=0 VLLM_MOONCAKE_BOOTSTRAP_PORT=8999 "$VLLM" serve "$MODEL" --served-model-name "$SERVED_NAME" \
       --port 8101 \
       --enforce-eager \
       --gpu-memory-utilization 0.85 \
@@ -67,7 +70,7 @@ case "$1" in
       "${PROF_ARGS[@]}"
     ;;
   decode)
-    CUDA_VISIBLE_DEVICES=2 "$VLLM" serve "$MODEL" \
+    CUDA_VISIBLE_DEVICES=2 "$VLLM" serve "$MODEL" --served-model-name "$SERVED_NAME" \
       --port 8200 \
       --enforce-eager \
       --gpu-memory-utilization 0.85 \
