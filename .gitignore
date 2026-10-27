@@ -9,3 +9,17 @@ models/**/vocab*
 models/**/LICENSE
 models/**/README.md
 models/**/generation_config.json
+
+# 2026-10-27 整理：历史实验数据本地保留、不进 GitHub（本地文件未删，仅停止跟踪）
+/experiments/2026-09-16-v1-reverify.md
+/experiments/2026-09-19-nsys-profiler-dissect.md
+/experiments/2026-09-19-torch-profiler-fragmentation.md
+/experiments/2026-09-20-slot-ratio-r1.md
+/experiments/2026-09-23-v2a-gather.md
+/experiments/2026-09-23-v3-budget-closure.md
+/experiments/2026-09-30-senior-feedback-tasks.md
+/experiments/2026-10-09-t8-mooncake-concurrency.md
+/experiments/2026-10-10-sink-staging-to-engine.md
+/results/raw/*.txt
+/results/raw/M1/
+/results/raw/M2/
