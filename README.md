@@ -70,18 +70,20 @@ Mooncake staging 池 352~359ms（`experiments/2026-09-16-v1-reverify.md`）。
   全量 patch，110KB，基于上游 `ba07e4a48f`，已验证干净应用；
   演进故事见 `patches/README.md`）。
 - 测量工具：`scripts/`（TTFT 测量、epoch 打点解剖、gather/scatter
-  自检、prompt 生成器）；工具链文档 `PROFILING.md`。
+  自检、prompt 生成器，以及 2026-10-26 realshape A/B 的 bench/解析脚本）。
 
 ## 目录
 
-- `ROADMAP.md` — 做过什么、放弃了什么、下一步
-- `experiments/` — 一次实验一张卡；**主卡
-  `2026-10-10-sink-staging-to-engine.md`（§1-14）记录整个下沉方案的
-  设计、分期实施、A/B 数据与踩坑**
-- `results/raw/` — 原始测量档
-- `patches/` — vLLM 侧改动的权威形态
+- `experiments/2026-10-26-main-vs-ours-realshape.md` — 最终轮实验卡：
+  realshape 测速 main vs gpu-staging-v1，128k 提速 1.6-2.1x
+- `results/raw/2026-10-26-realshape/` — 最终轮原始数据（jsonl + P/D 日志）
+- `patches/` — vLLM 侧改动的权威形态 + main 对照组打点 patch
 - `models/Qwen2.5-7B-Instruct-yarn128k/` — 100k 实验用 YaRN 配置
   （仅 config，权重不入库）
+
+> 2026-10-27 仓库整理：历史实验卡（含主卡 2026-10-10 §1-14）、早期原始档
+> 与 ROADMAP/PROFILING 等旧文档已转为仅本地保留（GitHub 不再展示）；
+> 上文"实验卡 §9/§13/§14"等引用指向这些本地档案。
 
 ## 复现
 

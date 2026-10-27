@@ -23,3 +23,6 @@ models/**/generation_config.json
 /results/raw/*.txt
 /results/raw/M1/
 /results/raw/M2/
+/ROADMAP.md
+/PROFILING.md
+/REPORT_V2A_GATHER.md
