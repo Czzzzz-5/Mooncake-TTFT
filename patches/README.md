@@ -32,3 +32,11 @@ Mooncake fork（分支 `gpu-staging-v1`）。
 
 注：旧 patches 0001-0005（M1 时代）已删除——0001 误含 66MB
 safetensors 二进制，且内容已被上述全量 patch 覆盖。
+
+## Mooncake main 对照组打点（mooncake-main-phase-timing.patch）
+
+2026-10-26 realshape A/B 的对照侧：打在 main e58ad953 上的**纯测量** patch
+（不进 `gpu-staging-v1` 分支）。`MC_TCP_PHASE_TIMING=1` 时每个完成的请求
+输出一行 `[MC-PHASE]`（copy_ms/io_ms/total_ms），用于把 main 的
+"每 64KB 串行拷→发"结构量化。对应实验卡：
+`experiments/2026-10-26-main-vs-ours-realshape.md`。

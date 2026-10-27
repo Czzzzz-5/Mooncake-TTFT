@@ -1,0 +1,258 @@
+diff --git a/mooncake-transfer-engine/src/transport/tcp_transport/tcp_transport_session_impl.h b/mooncake-transfer-engine/src/transport/tcp_transport/tcp_transport_session_impl.h
+index 40a1c4c3..04223776 100644
+--- a/mooncake-transfer-engine/src/transport/tcp_transport/tcp_transport_session_impl.h
++++ b/mooncake-transfer-engine/src/transport/tcp_transport/tcp_transport_session_impl.h
+@@ -48,6 +48,50 @@ struct SessionHeader {
+     uint8_t opcode;
+ };
+ 
++// --- Phase timing (measurement-only patch for the A/B against the --------
++// gpu-staging-v1 branch; NOT for upstream). Enabled by MC_TCP_PHASE_TIMING=1.
++// Accumulates per-request nanoseconds spent in CUDA staging copies (copy_ns:
++// the "GPU<->host" phases PH1/PH3) and in socket I/O waits (io_ns: the
++// network phase PH2), then logs one [MC-PHASE] line per completed request.
++// Off by default; when off the only cost is one cached flag check per chunk.
++static bool phaseTimingEnabled() {
++    static const bool val = [] {
++        const char* env = std::getenv("MC_TCP_PHASE_TIMING");
++        return env && env[0] == '1';
++    }();
++    return val;
++}
++
++struct PhaseTimer {
++    uint64_t copy_ns = 0;
++    uint64_t io_ns = 0;
++    std::chrono::steady_clock::time_point start;
++};
++
++static inline std::chrono::steady_clock::time_point phaseNow(bool enabled) {
++    return enabled ? std::chrono::steady_clock::now()
++                   : std::chrono::steady_clock::time_point{};
++}
++
++static inline uint64_t phaseElapsedNs(
++    std::chrono::steady_clock::time_point t0) {
++    return std::chrono::duration_cast<std::chrono::nanoseconds>(
++               std::chrono::steady_clock::now() - t0)
++        .count();
++}
++
++static void logPhaseTiming(const char* side, const char* op, uint64_t bytes,
++                           const PhaseTimer& tm, const char* status) {
++    double total_ms =
++        std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() -
++                                                  tm.start)
++            .count();
++    LOG(INFO) << "[MC-PHASE] side=" << side << " op=" << op
++              << " bytes=" << bytes << " copy_ms=" << tm.copy_ns / 1e6
++              << " io_ms=" << tm.io_ns / 1e6 << " total_ms=" << total_ms
++              << " status=" << status;
++}
++
+ #if defined(USE_CUDA) || defined(USE_MUSA) || defined(USE_HIP) ||  \
+     defined(USE_MLU) || defined(USE_MACA) || defined(USE_HYGON) || \
+     defined(USE_COREX)
+@@ -162,9 +206,14 @@ struct ServerSession : public std::enable_shared_from_this<ServerSession> {
+     int cuda_device_ = -1;
+     TcpStagingBuffer staging_buffer_;
+ #endif
++    PhaseTimer tm_;
+ 
+     void start() {
+         total_transferred_bytes_ = 0;
++        if (phaseTimingEnabled()) {
++            tm_ = PhaseTimer{};
++            tm_.start = std::chrono::steady_clock::now();
++        }
+         readHeader();
+     }
+ 
+@@ -241,6 +290,9 @@ struct ServerSession : public std::enable_shared_from_this<ServerSession> {
+             std::min(getChunkSize(), size - total_transferred_bytes_);
+         if (buffer_size == 0) {
+             // Transfer complete, wait for next request on this connection
++            if (phaseTimingEnabled()) {
++                logPhaseTiming("server", "READ", size, tm_, "OK");
++            }
+             start();
+             return;
+         }
+@@ -253,6 +305,8 @@ struct ServerSession : public std::enable_shared_from_this<ServerSession> {
+         if (cuda_device_ >= 0) {
+             dram_buffer = staging_buffer_.ensure(buffer_size);
+             cudaSetDevice(cuda_device_);
++            const bool tm_on = phaseTimingEnabled();
++            auto tm_t0 = phaseNow(tm_on);
+ #ifdef USE_MACA
+             cudaError_t cuda_status = copyTcpCudaMemory(
+                 dram_buffer, addr + total_transferred_bytes_, buffer_size);
+@@ -261,6 +315,7 @@ struct ServerSession : public std::enable_shared_from_this<ServerSession> {
+                 cudaMemcpy(dram_buffer, addr + total_transferred_bytes_,
+                            buffer_size, cudaMemcpyDefault);
+ #endif
++            if (tm_on) tm_.copy_ns += phaseElapsedNs(tm_t0);
+             if (cuda_status != cudaSuccess) {
+                 LOG(ERROR) << "ServerSession::writeBody failed to copy from "
+                               "CUDA memory. "
+@@ -270,10 +325,13 @@ struct ServerSession : public std::enable_shared_from_this<ServerSession> {
+         }
+ #endif
+ 
++        const bool tm_on_w = phaseTimingEnabled();
++        auto tm_io0 = phaseNow(tm_on_w);
+         asio::async_write(
+             *socket_, asio::buffer(dram_buffer, buffer_size),
+-            [this, addr, dram_buffer, self](const asio::error_code& ec,
+-                                            std::size_t transferred_bytes) {
++            [this, addr, dram_buffer, self, tm_on_w, tm_io0](
++                const asio::error_code& ec, std::size_t transferred_bytes) {
++                if (tm_on_w) tm_.io_ns += phaseElapsedNs(tm_io0);
+                 if (ec) {
+                     LOG(ERROR)
+                         << "ServerSession::writeBody failed. "
+@@ -300,6 +358,9 @@ struct ServerSession : public std::enable_shared_from_this<ServerSession> {
+             // acknowledge before accepting the next request — this is what
+             // makes the initiator's COMPLETED mean "applied at the
+             // destination" rather than "left my socket buffer".
++            if (phaseTimingEnabled()) {
++                logPhaseTiming("server", "WRITE", size, tm_, "OK");
++            }
+             if (v2_) {
+                 sendStatus(kStatusOk, [this] { start(); });
+             } else {
+@@ -318,10 +379,13 @@ struct ServerSession : public std::enable_shared_from_this<ServerSession> {
+         }
+ #endif
+ 
++        const bool tm_on_r = phaseTimingEnabled();
++        auto tm_io0 = phaseNow(tm_on_r);
+         asio::async_read(
+             *socket_, asio::buffer(dram_buffer, buffer_size),
+-            [this, addr, dram_buffer, self](const asio::error_code& ec,
+-                                            std::size_t transferred_bytes) {
++            [this, addr, dram_buffer, self, tm_on_r, tm_io0](
++                const asio::error_code& ec, std::size_t transferred_bytes) {
++                if (tm_on_r) tm_.io_ns += phaseElapsedNs(tm_io0);
+                 if (ec) {
+                     // If client closed connection (EOF), this is normal - don't
+                     // log
+@@ -342,6 +406,8 @@ struct ServerSession : public std::enable_shared_from_this<ServerSession> {
+     defined(USE_COREX)
+                 if (cuda_device_ >= 0) {
+                     cudaSetDevice(cuda_device_);
++                    const bool tm_on_c = phaseTimingEnabled();
++                    auto tm_t0 = phaseNow(tm_on_c);
+ #ifdef USE_MACA
+                     cudaError_t cuda_status =
+                         copyTcpCudaMemory(addr + total_transferred_bytes_,
+@@ -351,6 +417,7 @@ struct ServerSession : public std::enable_shared_from_this<ServerSession> {
+                         cudaMemcpy(addr + total_transferred_bytes_, dram_buffer,
+                                    transferred_bytes, cudaMemcpyDefault);
+ #endif
++                    if (tm_on_c) tm_.copy_ns += phaseElapsedNs(tm_t0);
+                     if (cuda_status != cudaSuccess) {
+                         LOG(ERROR)
+                             << "ServerSession::readBody failed to copy to CUDA "
+@@ -389,6 +456,7 @@ struct ClientSession : public std::enable_shared_from_this<ClientSession> {
+     int cuda_device_ = -1;
+     TcpStagingBuffer staging_buffer_;
+ #endif
++    PhaseTimer tm_;
+     // v2 WRITE runs the body stream and the ack read concurrently (one
+     // async op per direction; handlers serialize on the io thread). The
+     // concurrent read lets a rejection — or a v1 server's bogus payload —
+@@ -452,6 +520,10 @@ struct ClientSession : public std::enable_shared_from_this<ClientSession> {
+         header_.size = htole64(size);
+         header_.opcode = (uint8_t)opcode | (v2_ ? kOpcodeV2Flag : 0);
+         total_transferred_bytes_ = 0;
++        if (phaseTimingEnabled()) {
++            tm_ = PhaseTimer{};
++            tm_.start = std::chrono::steady_clock::now();
++        }
+         writeHeader();
+     }
+ 
+@@ -586,6 +658,16 @@ struct ClientSession : public std::enable_shared_from_this<ClientSession> {
+     void finalize(TransferStatusEnum status, bool clean) {
+         if (terminal_reported_) return;
+         terminal_reported_ = true;
++        if (phaseTimingEnabled() && total_transferred_bytes_ > 0) {
++            const char* op =
++                ((header_.opcode & ~kOpcodeV2Flag) ==
++                 static_cast<uint8_t>(TransferRequest::WRITE))
++                    ? "WRITE"
++                    : "READ";
++            logPhaseTiming("client", op, total_transferred_bytes_, tm_,
++                           status == TransferStatusEnum::COMPLETED ? "OK"
++                                                                   : "FAIL");
++        }
+         cancelStatusDeadline();
+         cancelProgressDeadline();
+ #ifdef MOONCAKE_TCP_TRANSPORT_TEST_HOOKS
+@@ -769,10 +851,13 @@ struct ClientSession : public std::enable_shared_from_this<ClientSession> {
+         }
+ #endif
+ 
++        const bool tm_on_r = phaseTimingEnabled();
++        auto tm_io0 = phaseNow(tm_on_r);
+         asio::async_read(
+             *socket_, asio::buffer(dram_buffer, buffer_size),
+-            [this, addr, dram_buffer, self](const asio::error_code& ec,
+-                                            std::size_t transferred_bytes) {
++            [this, addr, dram_buffer, self, tm_on_r, tm_io0](
++                const asio::error_code& ec, std::size_t transferred_bytes) {
++                if (tm_on_r) tm_.io_ns += phaseElapsedNs(tm_io0);
+                 if (ec) {
+                     LOG(ERROR)
+                         << "ClientSession::readBody failed. "
+@@ -803,6 +888,8 @@ struct ClientSession : public std::enable_shared_from_this<ClientSession> {
+     defined(USE_COREX)
+                 if (cuda_device_ >= 0) {
+                     cudaSetDevice(cuda_device_);
++                    const bool tm_on_c = phaseTimingEnabled();
++                    auto tm_t0 = phaseNow(tm_on_c);
+ #ifdef USE_MACA
+                     cudaError_t cuda_status =
+                         copyTcpCudaMemory(addr + total_transferred_bytes_,
+@@ -812,6 +899,7 @@ struct ClientSession : public std::enable_shared_from_this<ClientSession> {
+                         cudaMemcpy(addr + total_transferred_bytes_, dram_buffer,
+                                    transferred_bytes, cudaMemcpyDefault);
+ #endif
++                    if (tm_on_c) tm_.copy_ns += phaseElapsedNs(tm_t0);
+                     if (cuda_status != cudaSuccess) {
+                         LOG(ERROR)
+                             << "ClientSession::readBody failed to copy to CUDA "
+@@ -868,6 +956,8 @@ struct ClientSession : public std::enable_shared_from_this<ClientSession> {
+         if (cuda_device_ >= 0) {
+             dram_buffer = staging_buffer_.ensure(buffer_size);
+             cudaSetDevice(cuda_device_);
++            const bool tm_on = phaseTimingEnabled();
++            auto tm_t0 = phaseNow(tm_on);
+ #ifdef USE_MACA
+             cudaError_t cuda_status = copyTcpCudaMemory(
+                 dram_buffer, addr + total_transferred_bytes_, buffer_size);
+@@ -876,6 +966,7 @@ struct ClientSession : public std::enable_shared_from_this<ClientSession> {
+                 cudaMemcpy(dram_buffer, addr + total_transferred_bytes_,
+                            buffer_size, cudaMemcpyDefault);
+ #endif
++            if (tm_on) tm_.copy_ns += phaseElapsedNs(tm_t0);
+             if (cuda_status != cudaSuccess) {
+                 LOG(ERROR) << "ClientSession::writeBody failed to copy from "
+                               "CUDA memory. "
+@@ -887,10 +978,13 @@ struct ClientSession : public std::enable_shared_from_this<ClientSession> {
+ #endif
+ 
+         write_body_in_flight_ = true;
++        const bool tm_on_w = phaseTimingEnabled();
++        auto tm_io0 = phaseNow(tm_on_w);
+         asio::async_write(
+             *socket_, asio::buffer(dram_buffer, buffer_size),
+-            [this, addr, dram_buffer, self](const asio::error_code& ec,
+-                                            std::size_t transferred_bytes) {
++            [this, addr, dram_buffer, self, tm_on_w, tm_io0](
++                const asio::error_code& ec, std::size_t transferred_bytes) {
++                if (tm_on_w) tm_.io_ns += phaseElapsedNs(tm_io0);
+                 write_body_in_flight_ = false;
+                 if (ec) {
+                     LOG(ERROR)
